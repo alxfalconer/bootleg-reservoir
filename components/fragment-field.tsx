@@ -44,6 +44,9 @@ function fallbackPosition(id: string): { x: number; y: number } {
   return { x: (abs % 75) + 5, y: ((abs >> 8) % 80) + 5 }
 }
 
+function clamp(v: number, min: number, max: number) { return Math.max(min, Math.min(max, v)) }
+function randRange(min: number, max: number) { return min + Math.random() * (max - min) }
+
 const DELETE_ANIMATE = {
   opacity: [1, 1, 0.85, 0.35, 0] as number[],
   scale: [1, 0.98, 0.95, 0.87, 0] as number[],
@@ -62,7 +65,8 @@ const DELETE_TRANSITION = {
   filter:  { duration: 0.75, times: [0, 0.12, 0.42, 0.72, 1], ease: "easeIn" as const },
 }
 
-type DragState = { id: string; startX: number; startY: number; initialPos: { x: number; y: number } }
+type DragState  = { id: string; startX: number; startY: number; initialPos: { x: number; y: number } }
+type DriftOffset = { x: number; y: number; rotate: number; scale: number; zOffset: number }
 
 const DISPLAY_ORDER_KEY = "rsv-display-order"
 
@@ -73,6 +77,9 @@ function loadDisplayOrder(): string[] {
   } catch { return [] }
 }
 
+// Very slow ease-in-out — starts almost flat, accelerates through the middle, settles gently
+const DRIFT_EASE = [0.76, 0, 0.24, 1] as const
+
 export function FragmentField({ serverArtifacts }: FragmentFieldProps) {
   const router = useRouter()
   const { user } = useAuth()
@@ -81,11 +88,15 @@ export function FragmentField({ serverArtifacts }: FragmentFieldProps) {
   const effectiveView = mediaFilter !== "all" ? "grid" : viewMode
   const { allArtifacts } = useArtifacts(serverArtifacts)
 
-  const containerRef   = useRef<HTMLDivElement>(null)
-  const dragStateRef   = useRef<DragState | null>(null)
-  const didDragRef     = useRef(false)
-  const isFirstRender  = useRef(true)
-  const executeShuffleRef = useRef<() => void>(() => {})
+  const containerRef        = useRef<HTMLDivElement>(null)
+  const dragStateRef        = useRef<DragState | null>(null)
+  const didDragRef          = useRef(false)
+  const isFirstRender       = useRef(true)
+  const executeShuffleRef   = useRef<() => void>(() => {})
+  const driftStateRef       = useRef<Record<string, DriftOffset>>({})
+  const inactivityTimerRef  = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const visibleArtifactsRef = useRef<Artifact[]>([])
+  const hasStartedDriftRef  = useRef(false)
 
   const [positions,    setPositions]    = useState(() => buildInitialPositions(allArtifacts))
   const [draggedId,    setDraggedId]    = useState<string | null>(null)
@@ -95,6 +106,11 @@ export function FragmentField({ serverArtifacts }: FragmentFieldProps) {
   const [deletingId,   setDeletingId]   = useState<string | null>(null)
   const [displayOrder, setDisplayOrder] = useState<string[]>([])
   const [singleIndex,  setSingleIndex]  = useState(0)
+  const [driftState,   setDriftState]   = useState<Record<string, DriftOffset>>({})
+  const [driftActive,  setDriftActive]  = useState(true)
+
+  // Keep refs in sync with latest state (avoids stale closures in intervals/handlers)
+  useEffect(() => { driftStateRef.current = driftState }, [driftState])
 
   // Merge stored order with current artifact list — new artifacts append, removed ones drop
   const orderedArtifacts = useMemo(() => {
@@ -112,6 +128,8 @@ export function FragmentField({ serverArtifacts }: FragmentFieldProps) {
     if (mediaFilter === "words") return orderedArtifacts.filter(a => a.type === "text" || a.type === "found text")
     return orderedArtifacts.filter(a => a.media.type === mediaFilter)
   }, [orderedArtifacts, mediaFilter])
+
+  useEffect(() => { visibleArtifactsRef.current = visibleArtifacts }, [visibleArtifacts])
 
   // Load stored order after hydration to avoid server/client mismatch
   useEffect(() => {
@@ -132,12 +150,25 @@ export function FragmentField({ serverArtifacts }: FragmentFieldProps) {
     } else if (viewMode === "grid") {
       setDisplayOrder([...orderedArtifacts].sort(() => Math.random() - 0.5).map(a => a.id))
     } else {
-      // chaos: randomize order + scatter positions
       setDisplayOrder([...orderedArtifacts].sort(() => Math.random() - 0.5).map(a => a.id))
       setPositions(prev => {
         const next = { ...prev }
         orderedArtifacts.forEach(a => {
           next[a.id] = { x: 2 + Math.random() * 83, y: 2 + Math.random() * 88 }
+        })
+        return next
+      })
+      // Dramatic drift burst
+      setDriftState(() => {
+        const next: Record<string, DriftOffset> = {}
+        orderedArtifacts.forEach(a => {
+          next[a.id] = {
+            x:       randRange(-120, 120),
+            y:       randRange(-120, 120),
+            rotate:  randRange(-8, 8),
+            scale:   randRange(0.93, 1.07),
+            zOffset: Math.floor(randRange(-10, 10)),
+          }
         })
         return next
       })
@@ -169,14 +200,99 @@ export function FragmentField({ serverArtifacts }: FragmentFieldProps) {
     return () => window.removeEventListener("deposit:open", handler)
   }, [])
 
+  // Seed initial drift offsets when entering chaos view
+  useEffect(() => {
+    if (effectiveView !== "chaos") return
+    setDriftState(prev => {
+      const next = { ...prev }
+      visibleArtifactsRef.current.forEach(a => {
+        if (!next[a.id]) {
+          next[a.id] = {
+            x:       randRange(-20, 20),
+            y:       randRange(-20, 20),
+            rotate:  randRange(-3, 3),
+            scale:   randRange(0.97, 1.03),
+            zOffset: Math.floor(randRange(-3, 3)),
+          }
+        }
+      })
+      return next
+    })
+  }, [effectiveView])
+
+  // Pause drift on hover / expand / drag; resume 5 s after last interaction
+  useEffect(() => {
+    if (inactivityTimerRef.current) { clearTimeout(inactivityTimerRef.current); inactivityTimerRef.current = null }
+    if (effectiveView !== "chaos") return
+
+    const isInteracting = hoveredId !== null || expandedId !== null || draggedId !== null
+    if (isInteracting) {
+      setDriftActive(false)
+    } else {
+      inactivityTimerRef.current = setTimeout(() => setDriftActive(true), 3000)
+    }
+    return () => { if (inactivityTimerRef.current) { clearTimeout(inactivityTimerRef.current); inactivityTimerRef.current = null } }
+  }, [hoveredId, expandedId, draggedId, effectiveView])
+
+  // Drift interval — each artifact moves to a new target every 3 s.
+  // On initial page load, waits 7 s before the first tick so motion eases in from rest.
+  // After any interaction pause, resumes immediately (no re-delay).
+  useEffect(() => {
+    if (!driftActive || effectiveView !== "chaos") return
+
+    const fireDrift = () => {
+      setDriftState(prev => {
+        const next: Record<string, DriftOffset> = { ...prev }
+        visibleArtifactsRef.current.forEach(a => {
+          next[a.id] = {
+            x:       randRange(-40, 40),
+            y:       randRange(-40, 40),
+            rotate:  randRange(-5, 5),
+            scale:   randRange(0.96, 1.04),
+            zOffset: Math.floor(randRange(-6, 6)),
+          }
+        })
+        return next
+      })
+    }
+
+    const initialDelay = hasStartedDriftRef.current ? 0 : 7000
+    let intervalId: ReturnType<typeof setInterval>
+
+    const timerId = setTimeout(() => {
+      hasStartedDriftRef.current = true
+      fireDrift()
+      intervalId = setInterval(fireDrift, 3000)
+    }, initialDelay)
+
+    return () => {
+      clearTimeout(timerId)
+      clearInterval(intervalId)
+    }
+  }, [driftActive, effectiveView])
+
   // --- Drag handlers (chaos only) ---
 
   function handlePointerDown(e: React.PointerEvent, id: string) {
     if (e.button !== 0) return
     e.preventDefault()
     containerRef.current?.setPointerCapture(e.pointerId)
-    const pos = positions[id] ?? fallbackPosition(id)
-    dragStateRef.current = { id, startX: e.clientX, startY: e.clientY, initialPos: { ...pos } }
+
+    // Absorb current drift offset into base position so drag coordinates are accurate
+    let currentPos = positions[id] ?? fallbackPosition(id)
+    const drift = driftStateRef.current[id]
+    if (drift && containerRef.current) {
+      const rect = containerRef.current.getBoundingClientRect()
+      const absorbed = {
+        x: clamp(currentPos.x + (drift.x / rect.width  * 100), 0, 85),
+        y: clamp(currentPos.y + (drift.y / rect.height * 100), 0, 95),
+      }
+      setPositions(prev => ({ ...prev, [id]: absorbed }))
+      setDriftState(prev => ({ ...prev, [id]: { x: 0, y: 0, rotate: 0, scale: 1, zOffset: 0 } }))
+      currentPos = absorbed
+    }
+
+    dragStateRef.current = { id, startX: e.clientX, startY: e.clientY, initialPos: { ...currentPos } }
     didDragRef.current = false
     setDraggedId(id)
   }
@@ -194,7 +310,7 @@ export function FragmentField({ serverArtifacts }: FragmentFieldProps) {
   }
 
   function handlePointerUp() {
-    const drag   = dragStateRef.current
+    const drag    = dragStateRef.current
     const wasDrag = didDragRef.current
     const id      = drag?.id
     dragStateRef.current = null
@@ -273,30 +389,46 @@ export function FragmentField({ serverArtifacts }: FragmentFieldProps) {
           onPointerLeave={handlePointerUp}
         >
           {visibleArtifacts.map((artifact, index) => {
-            const pos       = positions[artifact.id] ?? fallbackPosition(artifact.id)
+            const pos        = positions[artifact.id] ?? fallbackPosition(artifact.id)
             const isDeleting = deletingId === artifact.id
+            const isDragging = draggedId === artifact.id
+            const isHovered  = hoveredId === artifact.id
+            const drift      = driftState[artifact.id] ?? { x: 0, y: 0, rotate: 0 }
+
             return (
-              <div
+              <motion.div
                 key={artifact.id}
-                className={`absolute transition-transform duration-75 ${
-                  draggedId === artifact.id ? "cursor-grabbing" : "cursor-grab"
-                }`}
+                className={isDragging ? "absolute cursor-grabbing" : "absolute cursor-grab"}
                 style={{
-                  top:    `${pos.y}%`,
-                  left:   `${pos.x}%`,
-                  zIndex: draggedId === artifact.id ? 100 : hoveredId === artifact.id ? 50 : index,
-                  transform:
-                    draggedId === artifact.id ? "scale(1.03) rotate(1deg)" :
-                    hoveredId  === artifact.id ? "scale(1.02)" : "scale(1)",
-                  opacity:       draggedId === artifact.id ? 0.95 : 1,
+                  top:           `${pos.y}%`,
+                  left:          `${pos.x}%`,
+                  zIndex:        isDragging ? 100 : isHovered ? 50 : index + (drift.zOffset ?? 0),
                   pointerEvents: isDeleting ? "none" : undefined,
+                }}
+                animate={{
+                  x:       isDragging ? 0 : drift.x,
+                  y:       isDragging ? 0 : drift.y,
+                  rotate:  isDragging ? 0 : drift.rotate,
+                  scale:   isDragging ? 1.03 : isHovered ? 1.02 : (drift.scale ?? 1),
+                  opacity: isDragging ? 0.95 : 1,
+                }}
+                transition={isDragging ? {
+                  x: { duration: 0 }, y: { duration: 0 }, rotate: { duration: 0 },
+                  scale: { duration: 0.15, ease: "easeOut" },
+                  opacity: { duration: 0.1 },
+                } : {
+                  x:       { duration: 9,    ease: DRIFT_EASE },
+                  y:       { duration: 9.5,  ease: DRIFT_EASE },
+                  rotate:  { duration: 10,   ease: DRIFT_EASE },
+                  scale:   { duration: 8,    ease: DRIFT_EASE },
+                  opacity: { duration: 0.1 },
                 }}
                 onPointerDown={e => !isDeleting && handlePointerDown(e, artifact.id)}
                 onMouseEnter={() => !dragStateRef.current && !isDeleting && setHoveredId(artifact.id)}
                 onMouseLeave={() => setHoveredId(null)}
               >
                 {card(artifact)}
-              </div>
+              </motion.div>
             )
           })}
 

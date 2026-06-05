@@ -30,7 +30,7 @@ export function DepositTrigger({ collapsed }: { collapsed?: boolean } = {}) {
   return (
     <button
       onClick={handleClick}
-      className="text-xs border border-foreground/20 px-3 py-1 text-foreground bg-foreground/5 hover:bg-foreground hover:text-background transition-colors"
+      className="text-xs border border-foreground/10 px-3 py-1 text-foreground bg-foreground/5 hover:bg-foreground hover:text-background transition-colors rounded-[5px]"
     >
       deposit
     </button>

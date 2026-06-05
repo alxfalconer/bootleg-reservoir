@@ -19,7 +19,7 @@ export function ViewControls() {
   const { viewMode, setViewMode, triggerShuffle, mediaFilter, setMediaFilter } = useViewContext()
 
   return (
-    <div className="fixed bottom-5 right-5 md:bottom-7 md:right-7 z-[55] border border-foreground/[0.08] bg-white shadow-md">
+    <div className="fixed bottom-5 right-5 md:bottom-7 md:right-7 z-[55] border border-foreground/[0.08] bg-white shadow-md rounded-[5px] overflow-hidden">
 
       {/* View mode */}
       <div className="flex items-center gap-6 px-6 py-2">
@@ -28,7 +28,7 @@ export function ViewControls() {
             key={value}
             onClick={() => setViewMode(value)}
             className={`text-[10px] font-bold tracking-wide transition-colors duration-150 ${
-              viewMode === value ? "bg-foreground/5 text-foreground px-2 py-0.5" : "text-foreground/40 hover:text-foreground/60"
+              viewMode === value ? "bg-foreground/5 text-foreground px-2 py-0.5 rounded-[5px]" : "text-foreground/40 hover:text-foreground/60"
             }`}
           >
             {label}
@@ -52,7 +52,7 @@ export function ViewControls() {
             key={value}
             onClick={() => setMediaFilter(value)}
             className={`text-[10px] font-bold tracking-wide transition-colors duration-150 ${
-              mediaFilter === value ? "bg-foreground/5 text-foreground px-2 py-0.5" : "text-foreground/40 hover:text-foreground/60"
+              mediaFilter === value ? "bg-foreground/5 text-foreground px-2 py-0.5 rounded-[5px]" : "text-foreground/40 hover:text-foreground/60"
             }`}
           >
             {label}
