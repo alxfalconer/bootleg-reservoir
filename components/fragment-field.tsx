@@ -60,7 +60,7 @@ function getLayerTransform(relPos: number) {
     const t = relPos
     return {
       scale:         lerp(1,    0.65,  t),
-      opacity:       lerp(1,    0.20,  t),
+      opacity:       lerp(1,    0.20,  t * t),
       blur:          lerp(0,    4,     t),
       contrast:      lerp(1,    0.72,  t),
       saturate:      lerp(1,    0.50,  t),
@@ -435,7 +435,7 @@ export function FragmentField({ serverArtifacts }: FragmentFieldProps) {
   useEffect(() => {
     if (effectiveView !== "chaos") return
 
-    const SPEED_PX_PER_S  = 120
+    const SPEED_PX_PER_S  = 220
     const RESUME_AFTER_MS = 3000
 
     let lastTime: number | null = null
