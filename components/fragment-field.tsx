@@ -258,7 +258,7 @@ export function FragmentField({ serverArtifacts }: FragmentFieldProps) {
   const router   = useRouter()
   const { user } = useAuth()
   const isAdmin  = !!user
-  const { viewMode, shuffleSignal, mediaFilter } = useViewContext()
+  const { viewMode, shuffleSignal, mediaFilter, autoplay } = useViewContext()
   const effectiveView = mediaFilter !== "all" ? "grid" : viewMode
   const { allArtifacts } = useArtifacts(serverArtifacts)
 
@@ -275,6 +275,11 @@ export function FragmentField({ serverArtifacts }: FragmentFieldProps) {
   const consumedCountRef    = useRef(0)
   const slotKeyCounterRef   = useRef(NUM_LAYERS)
   const slotsRef            = useRef<LayerSlot[]>([])
+  const autoplayEnabledRef  = useRef(false)
+  const lastManualScrollRef = useRef(0)
+  const hoveredIdRef        = useRef<string | null>(null)
+  const expandedIdRef       = useRef<string | null>(null)
+  const draggedIdRef        = useRef<string | null>(null)
 
   const [slots,        setSlots]        = useState<LayerSlot[]>(() => buildInitialSlots(serverArtifacts))
   const [draggedId,    setDraggedId]    = useState<string | null>(null)
@@ -298,6 +303,14 @@ export function FragmentField({ serverArtifacts }: FragmentFieldProps) {
 
   useEffect(() => { driftStateRef.current = driftState }, [driftState])
   useEffect(() => { slotsRef.current = slots }, [slots])
+  useEffect(() => {
+    autoplayEnabledRef.current = autoplay
+    // Clicking play should start immediately — don't block on the resume delay
+    if (autoplay) lastManualScrollRef.current = 0
+  }, [autoplay])
+  useEffect(() => { hoveredIdRef.current  = hoveredId  }, [hoveredId])
+  useEffect(() => { expandedIdRef.current = expandedId }, [expandedId])
+  useEffect(() => { draggedIdRef.current  = draggedId  }, [draggedId])
 
   const orderedArtifacts = useMemo(() => {
     const existingIds = new Set(allArtifacts.map(a => a.id))
@@ -398,6 +411,78 @@ export function FragmentField({ serverArtifacts }: FragmentFieldProps) {
     }
     el.addEventListener("scroll", onScroll, { passive: true })
     return () => el.removeEventListener("scroll", onScroll)
+  }, [effectiveView])
+
+  // Detect genuine user scroll input (wheel / touch) so autoplay yields control.
+  // These events only fire for real user input, not programmatic scrollTop changes.
+  useEffect(() => {
+    if (effectiveView !== "chaos") return
+    const el = scrollTrackRef.current?.parentElement
+    if (!el) return
+    const onUserInput = () => { lastManualScrollRef.current = Date.now() }
+    el.addEventListener("wheel",     onUserInput, { passive: true })
+    el.addEventListener("touchmove", onUserInput, { passive: true })
+    return () => {
+      el.removeEventListener("wheel",     onUserInput)
+      el.removeEventListener("touchmove", onUserInput)
+    }
+  }, [effectiveView])
+
+  // DEBUG: autoplay RAF
+  useEffect(() => {
+    if (effectiveView !== "chaos") return
+
+    const SPEED_PX_PER_S  = 100  // DEBUG: fast for visibility testing
+    const RESUME_AFTER_MS = 3000
+
+    let lastTime: number | null = null
+    let rafId: number
+    let tickCount = 0
+
+    const tick = (now: number) => {
+      tickCount++
+
+      // Log every 60 ticks (~1s) so console isn't flooded
+      if (tickCount % 60 === 0) {
+        const el = scrollTrackRef.current?.parentElement
+        console.log("[autoplay] tick", tickCount, {
+          autoplayEnabled:  autoplayEnabledRef.current,
+          el:               el ? el.tagName + "." + el.className.slice(0, 40) : "NULL",
+          scrollTop:        el?.scrollTop ?? "N/A",
+          scrollHeight:     el?.scrollHeight ?? "N/A",
+          clientHeight:     el?.clientHeight ?? "N/A",
+          hoveredId:        hoveredIdRef.current,
+          expandedId:       expandedIdRef.current,
+          draggedId:        draggedIdRef.current,
+          msSinceManual:    Date.now() - lastManualScrollRef.current,
+        })
+      }
+
+      if (lastTime !== null) {
+        const dt = now - lastTime
+        const el = scrollTrackRef.current?.parentElement
+
+        if (
+          el &&
+          autoplayEnabledRef.current &&
+          !hoveredIdRef.current &&
+          !expandedIdRef.current &&
+          !draggedIdRef.current &&
+          Date.now() - lastManualScrollRef.current >= RESUME_AFTER_MS
+        ) {
+          const before = el.scrollTop
+          el.scrollTop += (SPEED_PX_PER_S / 1000) * dt
+          if (tickCount % 60 === 0) {
+            console.log("[autoplay] scrollTop", before, "→", el.scrollTop)
+          }
+        }
+      }
+      lastTime = now
+      rafId = requestAnimationFrame(tick)
+    }
+
+    rafId = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(rafId)
   }, [effectiveView])
 
   executeShuffleRef.current = () => {
@@ -755,6 +840,13 @@ export function FragmentField({ serverArtifacts }: FragmentFieldProps) {
                 </div>
               )
             })}
+
+            {/* DEBUG: autoplay indicator */}
+            {autoplay && (
+              <div className="absolute top-3 left-1/2 -translate-x-1/2 z-[200] bg-red-500 text-white text-[10px] font-mono font-bold px-3 py-1 pointer-events-none">
+                AUTOSCROLLING — scrollY: {Math.round(scrollY)}
+              </div>
+            )}
 
 </div>
         </div>

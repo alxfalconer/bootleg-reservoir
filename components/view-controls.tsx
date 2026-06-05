@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react"
 import { motion, useMotionValue } from "motion/react"
-import { Image as ImageIcon, Link as LinkIcon, Shuffle as ShuffleIcon } from "lucide-react"
+import { Image as ImageIcon, Link as LinkIcon, Shuffle as ShuffleIcon, Play as PlayIcon, Pause as PauseIcon } from "lucide-react"
 import { useViewContext, type ViewMode, type MediaFilter } from "@/lib/view-context"
 import { useTheme } from "@/lib/theme"
 
@@ -15,7 +15,7 @@ const BORDER = "border-foreground/[0.13]"
 const POS_KEY = "rsv-panel-pos"
 
 export function ViewControls() {
-  const { viewMode, setViewMode, triggerShuffle, mediaFilter, setMediaFilter } = useViewContext()
+  const { viewMode, setViewMode, triggerShuffle, mediaFilter, setMediaFilter, autoplay, setAutoplay } = useViewContext()
   const { dark, toggle: toggleTheme } = useTheme()
   const constraintsRef = useRef<HTMLDivElement>(null)
   const isDraggingRef  = useRef(false)
@@ -72,7 +72,7 @@ export function ViewControls() {
             <button
               key={value}
               onPointerDown={e => e.stopPropagation()}
-              onClick={guard(() => { setViewMode(value); if (value === "chaos") setMediaFilter("all") })}
+              onClick={guard(() => { setViewMode(value); if (value === "chaos") setMediaFilter("all"); else setAutoplay(false) })}
               className={`flex-1 text-[9px] font-bold tracking-widest uppercase px-3 py-2 transition-colors duration-100 text-center cursor-pointer
                 ${i > 0 ? `border-l ${BORDER}` : ""}
                 ${viewMode === value
@@ -84,6 +84,25 @@ export function ViewControls() {
             </button>
           ))}
         </div>
+
+        {/* Play / Pause — Field mode only */}
+        {viewMode === "chaos" && (
+          <button
+            onPointerDown={e => e.stopPropagation()}
+            onClick={guard(() => setAutoplay(!autoplay))}
+            title={autoplay ? "Pause" : "Play"}
+            className={`w-full flex items-center justify-center py-2.5 border-b ${BORDER} transition-colors duration-100 cursor-pointer
+              ${autoplay
+                ? "text-foreground hover:text-foreground/70 bg-foreground/[0.04]"
+                : "text-foreground/35 hover:text-foreground/70 hover:bg-foreground/[0.03]"
+              }`}
+          >
+            {autoplay
+              ? <PauseIcon size={16} strokeWidth={1.6} />
+              : <PlayIcon  size={16} strokeWidth={1.6} />
+            }
+          </button>
+        )}
 
         {/* Shuffle — primary action */}
         <button

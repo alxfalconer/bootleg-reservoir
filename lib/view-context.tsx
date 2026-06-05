@@ -12,6 +12,8 @@ interface ViewContextValue {
   triggerShuffle: () => void
   mediaFilter: MediaFilter
   setMediaFilter: (f: MediaFilter) => void
+  autoplay: boolean
+  setAutoplay: (v: boolean) => void
 }
 
 const ViewContext = createContext<ViewContextValue | null>(null)
@@ -20,6 +22,7 @@ export function ViewProvider({ children }: { children: ReactNode }) {
   const [viewMode, setViewModeState] = useState<ViewMode>("chaos")
   const [shuffleSignal, setShuffleSignal] = useState(0)
   const [mediaFilter, setMediaFilterState] = useState<MediaFilter>("all")
+  const [autoplay, setAutoplayState] = useState(false)
 
   useEffect(() => {
     try {
@@ -37,8 +40,10 @@ export function ViewProvider({ children }: { children: ReactNode }) {
 
   const setMediaFilter = useCallback((f: MediaFilter) => setMediaFilterState(f), [])
 
+  const setAutoplay = useCallback((v: boolean) => setAutoplayState(v), [])
+
   return (
-    <ViewContext.Provider value={{ viewMode, setViewMode, shuffleSignal, triggerShuffle, mediaFilter, setMediaFilter }}>
+    <ViewContext.Provider value={{ viewMode, setViewMode, shuffleSignal, triggerShuffle, mediaFilter, setMediaFilter, autoplay, setAutoplay }}>
       {children}
     </ViewContext.Provider>
   )
