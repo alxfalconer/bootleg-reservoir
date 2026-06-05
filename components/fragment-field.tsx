@@ -15,25 +15,51 @@ interface FragmentFieldProps {
   serverArtifacts: Artifact[]
 }
 
-const BASE_POSITIONS = [
-  { x: 5, y: 8 },
-  { x: 55, y: 3 },
-  { x: 28, y: 22 },
-  { x: 72, y: 15 },
-  { x: 8, y: 38 },
-  { x: 48, y: 45 },
-  { x: 75, y: 55 },
-  { x: 20, y: 68 },
-  { x: 58, y: 72 },
-  { x: 5, y: 85 },
-  { x: 38, y: 92 },
-  { x: 68, y: 88 },
-  { x: 82, y: 35 },
-]
+// ── Temporal depth constants ──────────────────────────────────────────────────
 
-function buildInitialPositions(artifacts: Artifact[]) {
+const STRATUM_HEIGHT  = 600  // px of scroll per year layer
+const STRATA_YEARS    = [2026, 2025, 2024, 2023, 2022, 2021] as const
+const NEWEST_YEAR     = 2026
+const OLDEST_YEAR     = 2021
+
+// ── Pure helpers ──────────────────────────────────────────────────────────────
+
+function clamp(v: number, min: number, max: number) { return Math.max(min, Math.min(max, v)) }
+function randRange(min: number, max: number) { return min + Math.random() * (max - min) }
+
+function getArtifactDepth(artifact: Artifact): number {
+  const year = artifact.depositYear ?? NEWEST_YEAR
+  return clamp(NEWEST_YEAR - year, 0, 5)
+}
+
+// Visual properties scaled by how far the artifact is from the depth camera.
+// relDepth > 0 = behind camera (older, receding); relDepth < 0 = in front (emerging)
+function getDepthProps(artDepth: number, depthCamera: number) {
+  const rel = artDepth - depthCamera
+  return {
+    scale:         1 - clamp(rel * 0.055, -0.05, 0.30),
+    opacity:       clamp(1 - rel * 0.08, 0.55, 1),
+    blur:          clamp(rel * 0.5, 0, 3.5),
+    driftDuration: 9 + artDepth * 1.5,  // older → slower drift
+  }
+}
+
+// Deterministic, year-biased initial positions.
+// Newer artifacts cluster near the top; older ones settle deeper in the canvas.
+function buildInitialPositions(artifacts: Artifact[]): Record<string, { x: number; y: number }> {
   const pos: Record<string, { x: number; y: number }> = {}
-  artifacts.forEach((a, i) => { pos[a.id] = BASE_POSITIONS[i % BASE_POSITIONS.length] })
+  artifacts.forEach(a => {
+    const depth = getArtifactDepth(a)
+    let h = 0
+    for (let i = 0; i < a.id.length; i++) h = (Math.imul(31, h) + a.id.charCodeAt(i)) | 0
+    const seed = Math.abs(h)
+    const yBase   = (depth / 5) * 68 + 4           // depth 0 → ~4%, depth 5 → ~72%
+    const yJitter = ((seed % 300) / 300 - 0.5) * 16 // ±8% jitter
+    pos[a.id] = {
+      x: (seed % 78) + 3,
+      y: clamp(yBase + yJitter, 3, 85),
+    }
+  })
   return pos
 }
 
@@ -44,12 +70,11 @@ function fallbackPosition(id: string): { x: number; y: number } {
   return { x: (abs % 75) + 5, y: ((abs >> 8) % 80) + 5 }
 }
 
-function clamp(v: number, min: number, max: number) { return Math.max(min, Math.min(max, v)) }
-function randRange(min: number, max: number) { return min + Math.random() * (max - min) }
+// ── Animation constants ───────────────────────────────────────────────────────
 
 const DELETE_ANIMATE = {
   opacity: [1, 1, 0.85, 0.35, 0] as number[],
-  scale: [1, 0.98, 0.95, 0.87, 0] as number[],
+  scale:   [1, 0.98, 0.95, 0.87, 0] as number[],
   filter: [
     "blur(0px) saturate(1) brightness(1)",
     "blur(0.3px) saturate(0.75) brightness(1.05)",
@@ -65,7 +90,12 @@ const DELETE_TRANSITION = {
   filter:  { duration: 0.75, times: [0, 0.12, 0.42, 0.72, 1], ease: "easeIn" as const },
 }
 
-type DragState  = { id: string; startX: number; startY: number; initialPos: { x: number; y: number } }
+// Very slow ease-in-out — starts almost flat, accelerates through middle, settles gently
+const DRIFT_EASE = [0.76, 0, 0.24, 1] as const
+
+// ── Types ─────────────────────────────────────────────────────────────────────
+
+type DragState   = { id: string; startX: number; startY: number; initialPos: { x: number; y: number } }
 type DriftOffset = { x: number; y: number; rotate: number; scale: number; zOffset: number }
 
 const DISPLAY_ORDER_KEY = "rsv-display-order"
@@ -77,11 +107,10 @@ function loadDisplayOrder(): string[] {
   } catch { return [] }
 }
 
-// Very slow ease-in-out — starts almost flat, accelerates through the middle, settles gently
-const DRIFT_EASE = [0.76, 0, 0.24, 1] as const
+// ── Component ─────────────────────────────────────────────────────────────────
 
 export function FragmentField({ serverArtifacts }: FragmentFieldProps) {
-  const router = useRouter()
+  const router  = useRouter()
   const { user } = useAuth()
   const isAdmin = !!user
   const { viewMode, shuffleSignal, mediaFilter } = useViewContext()
@@ -108,11 +137,14 @@ export function FragmentField({ serverArtifacts }: FragmentFieldProps) {
   const [singleIndex,  setSingleIndex]  = useState(0)
   const [driftState,   setDriftState]   = useState<Record<string, DriftOffset>>({})
   const [driftActive,  setDriftActive]  = useState(true)
+  const [scrollY,      setScrollY]      = useState(0)
 
-  // Keep refs in sync with latest state (avoids stale closures in intervals/handlers)
+  // Temporal depth camera — scrollY mapped to year layers
+  const depthCamera     = scrollY / STRATUM_HEIGHT
+  const currentDepthYear = clamp(Math.round(NEWEST_YEAR - depthCamera), OLDEST_YEAR, NEWEST_YEAR)
+
   useEffect(() => { driftStateRef.current = driftState }, [driftState])
 
-  // Merge stored order with current artifact list — new artifacts append, removed ones drop
   const orderedArtifacts = useMemo(() => {
     const existingIds = new Set(allArtifacts.map(a => a.id))
     const validOrder  = displayOrder.filter(id => existingIds.has(id))
@@ -131,18 +163,25 @@ export function FragmentField({ serverArtifacts }: FragmentFieldProps) {
 
   useEffect(() => { visibleArtifactsRef.current = visibleArtifacts }, [visibleArtifacts])
 
-  // Load stored order after hydration to avoid server/client mismatch
   useEffect(() => {
     setDisplayOrder(loadDisplayOrder())
   }, [])
 
-  // Persist displayOrder — skip initial render to avoid overwriting stored value
   useEffect(() => {
     if (isFirstRender.current) { isFirstRender.current = false; return }
     try { localStorage.setItem(DISPLAY_ORDER_KEY, JSON.stringify(displayOrder)) } catch {}
   }, [displayOrder])
 
-  // Always-fresh shuffle — callback ref avoids stale closures in the signal effect
+  // Scroll tracking — reads scrollTop of the <main> ancestor
+  useEffect(() => {
+    if (effectiveView !== "chaos") return
+    const el = containerRef.current?.parentElement
+    if (!el) return
+    const onScroll = () => setScrollY(el.scrollTop)
+    el.addEventListener("scroll", onScroll, { passive: true })
+    return () => el.removeEventListener("scroll", onScroll)
+  }, [effectiveView])
+
   executeShuffleRef.current = () => {
     if (orderedArtifacts.length === 0) return
     if (viewMode === "single") {
@@ -158,7 +197,7 @@ export function FragmentField({ serverArtifacts }: FragmentFieldProps) {
         })
         return next
       })
-      // Dramatic drift burst
+      // Dramatic drift burst on shuffle
       setDriftState(() => {
         const next: Record<string, DriftOffset> = {}
         orderedArtifacts.forEach(a => {
@@ -180,7 +219,6 @@ export function FragmentField({ serverArtifacts }: FragmentFieldProps) {
     executeShuffleRef.current()
   }, [shuffleSignal])
 
-  // Arrow key navigation in single mode
   useEffect(() => {
     if (viewMode !== "single") return
     const handleKey = (e: KeyboardEvent) => {
@@ -193,7 +231,6 @@ export function FragmentField({ serverArtifacts }: FragmentFieldProps) {
     return () => window.removeEventListener("keydown", handleKey)
   }, [viewMode, visibleArtifacts.length, expandedId])
 
-  // Deposit form event
   useEffect(() => {
     const handler = () => setDepositOpen(true)
     window.addEventListener("deposit:open", handler)
@@ -220,11 +257,10 @@ export function FragmentField({ serverArtifacts }: FragmentFieldProps) {
     })
   }, [effectiveView])
 
-  // Pause drift on hover / expand / drag; resume 5 s after last interaction
+  // Pause on hover / expand / drag; resume 3 s after last interaction
   useEffect(() => {
     if (inactivityTimerRef.current) { clearTimeout(inactivityTimerRef.current); inactivityTimerRef.current = null }
     if (effectiveView !== "chaos") return
-
     const isInteracting = hoveredId !== null || expandedId !== null || draggedId !== null
     if (isInteracting) {
       setDriftActive(false)
@@ -234,9 +270,7 @@ export function FragmentField({ serverArtifacts }: FragmentFieldProps) {
     return () => { if (inactivityTimerRef.current) { clearTimeout(inactivityTimerRef.current); inactivityTimerRef.current = null } }
   }, [hoveredId, expandedId, draggedId, effectiveView])
 
-  // Drift interval — each artifact moves to a new target every 3 s.
-  // On initial page load, waits 7 s before the first tick so motion eases in from rest.
-  // After any interaction pause, resumes immediately (no re-delay).
+  // Drift interval — 7 s initial delay on page load, then every 3 s
   useEffect(() => {
     if (!driftActive || effectiveView !== "chaos") return
 
@@ -265,20 +299,16 @@ export function FragmentField({ serverArtifacts }: FragmentFieldProps) {
       intervalId = setInterval(fireDrift, 3000)
     }, initialDelay)
 
-    return () => {
-      clearTimeout(timerId)
-      clearInterval(intervalId)
-    }
+    return () => { clearTimeout(timerId); clearInterval(intervalId) }
   }, [driftActive, effectiveView])
 
-  // --- Drag handlers (chaos only) ---
+  // ── Drag handlers ───────────────────────────────────────────────────────────
 
   function handlePointerDown(e: React.PointerEvent, id: string) {
     if (e.button !== 0) return
     e.preventDefault()
     containerRef.current?.setPointerCapture(e.pointerId)
 
-    // Absorb current drift offset into base position so drag coordinates are accurate
     let currentPos = positions[id] ?? fallbackPosition(id)
     const drift = driftStateRef.current[id]
     if (drift && containerRef.current) {
@@ -319,7 +349,7 @@ export function FragmentField({ serverArtifacts }: FragmentFieldProps) {
     if (!wasDrag && id) setExpandedId(id)
   }
 
-  // --- Artifact lifecycle ---
+  // ── Artifact lifecycle ──────────────────────────────────────────────────────
 
   async function handleDeleteComplete(id: string) {
     await fetch(`/api/artifacts/${id}`, { method: "DELETE" })
@@ -334,7 +364,7 @@ export function FragmentField({ serverArtifacts }: FragmentFieldProps) {
     router.refresh()
   }
 
-  // --- Shared render helpers ---
+  // ── Render helpers ──────────────────────────────────────────────────────────
 
   function wrapDelete(artifact: Artifact, content: React.ReactNode) {
     const isDeleting = deletingId === artifact.id
@@ -382,18 +412,56 @@ export function FragmentField({ serverArtifacts }: FragmentFieldProps) {
       {effectiveView === "chaos" && (
         <div
           ref={containerRef}
-          className="relative w-full min-h-[1800px] md:min-h-[1400px]"
+          className="relative w-full min-h-[4200px]"
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
           onPointerCancel={handlePointerUp}
           onPointerLeave={handlePointerUp}
         >
+          {/* Sticky temporal depth indicator */}
+          <div className="sticky top-0 h-0 w-full z-[45] pointer-events-none overflow-visible">
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={currentDepthYear}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.6 }}
+                className="absolute top-5 left-5 space-y-1.5"
+              >
+                <div className="text-[9px] text-muted-foreground/30 tracking-[0.3em] uppercase tabular-nums">
+                  {currentDepthYear}
+                </div>
+                <div className="w-4 h-px bg-muted-foreground/15" />
+              </motion.div>
+            </AnimatePresence>
+          </div>
+
+          {/* Year strata dividers */}
+          {STRATA_YEARS.map((year, i) => (
+            <div
+              key={year}
+              className="absolute left-0 right-0 pointer-events-none select-none"
+              style={{ top: i * STRATUM_HEIGHT + 48 }}
+            >
+              <div className="flex items-center gap-4 px-5">
+                <span className="text-[9px] tracking-[0.28em] text-muted-foreground/15 uppercase tabular-nums shrink-0">
+                  {year}
+                </span>
+                <div className="flex-1 border-t border-muted-foreground/[0.05]" />
+              </div>
+            </div>
+          ))}
+
+          {/* Artifacts */}
           {visibleArtifacts.map((artifact, index) => {
             const pos        = positions[artifact.id] ?? fallbackPosition(artifact.id)
             const isDeleting = deletingId === artifact.id
             const isDragging = draggedId === artifact.id
             const isHovered  = hoveredId === artifact.id
-            const drift      = driftState[artifact.id] ?? { x: 0, y: 0, rotate: 0 }
+            const drift      = driftState[artifact.id] ?? { x: 0, y: 0, rotate: 0, scale: 1, zOffset: 0 }
+            const artDepth   = getArtifactDepth(artifact)
+            const { scale: dScale, opacity: dOpacity, blur: dBlur, driftDuration } = getDepthProps(artDepth, depthCamera)
 
             return (
               <motion.div
@@ -402,26 +470,29 @@ export function FragmentField({ serverArtifacts }: FragmentFieldProps) {
                 style={{
                   top:           `${pos.y}%`,
                   left:          `${pos.x}%`,
-                  zIndex:        isDragging ? 100 : isHovered ? 50 : index + (drift.zOffset ?? 0),
+                  // Newer artifacts sit on top; drift adds z-variation within each layer
+                  zIndex:        isDragging ? 100 : isHovered ? 50 : (10 - artDepth * 2) + (drift.zOffset ?? 0),
                   pointerEvents: isDeleting ? "none" : undefined,
+                  // Blur in style (not animate) so it tracks scroll immediately
+                  filter:        isDragging || isHovered ? undefined : dBlur > 0.05 ? `blur(${dBlur.toFixed(2)}px)` : undefined,
                 }}
                 animate={{
                   x:       isDragging ? 0 : drift.x,
                   y:       isDragging ? 0 : drift.y,
                   rotate:  isDragging ? 0 : drift.rotate,
-                  scale:   isDragging ? 1.03 : isHovered ? 1.02 : (drift.scale ?? 1),
-                  opacity: isDragging ? 0.95 : 1,
+                  scale:   isDragging ? 1.03 * dScale : isHovered ? 1.02 * dScale : (drift.scale ?? 1) * dScale,
+                  opacity: isDragging ? 0.95 : dOpacity,
                 }}
                 transition={isDragging ? {
                   x: { duration: 0 }, y: { duration: 0 }, rotate: { duration: 0 },
-                  scale: { duration: 0.15, ease: "easeOut" },
+                  scale:   { duration: 0.15, ease: "easeOut" },
                   opacity: { duration: 0.1 },
                 } : {
-                  x:       { duration: 9,    ease: DRIFT_EASE },
-                  y:       { duration: 9.5,  ease: DRIFT_EASE },
-                  rotate:  { duration: 10,   ease: DRIFT_EASE },
-                  scale:   { duration: 8,    ease: DRIFT_EASE },
-                  opacity: { duration: 0.1 },
+                  x:       { duration: driftDuration,       ease: DRIFT_EASE },
+                  y:       { duration: driftDuration + 0.5, ease: DRIFT_EASE },
+                  rotate:  { duration: driftDuration + 1,   ease: DRIFT_EASE },
+                  scale:   { duration: 8,                   ease: DRIFT_EASE },
+                  opacity: { duration: 0.4 },
                 }}
                 onPointerDown={e => !isDeleting && handlePointerDown(e, artifact.id)}
                 onMouseEnter={() => !dragStateRef.current && !isDeleting && setHoveredId(artifact.id)}
@@ -432,11 +503,8 @@ export function FragmentField({ serverArtifacts }: FragmentFieldProps) {
             )
           })}
 
-          <div className="absolute bottom-4 right-4 text-[10px] text-muted-foreground/40 pointer-events-none">
-            showing {visibleArtifacts.length} of ∞ fragments
-          </div>
-          <div className="absolute bottom-4 left-4 text-[10px] text-muted-foreground/30 pointer-events-none">
-            drag to rearrange
+          <div className="absolute bottom-4 right-4 text-[10px] text-muted-foreground/30 pointer-events-none select-none">
+            {visibleArtifacts.length} fragments
           </div>
         </div>
       )}
