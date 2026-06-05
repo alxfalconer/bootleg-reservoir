@@ -32,7 +32,6 @@ export default function ReservoirPage() {
 
       </div>
 
-      {/* Floating view controls — fixed, outside scroll containers */}
       <ViewControls />
     </ClientProviders>
   )

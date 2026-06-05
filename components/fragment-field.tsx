@@ -68,7 +68,8 @@ function loadDisplayOrder(): string[] {
 }
 
 export function FragmentField() {
-  const { viewMode, shuffleSignal } = useViewContext()
+  const { viewMode, shuffleSignal, mediaFilter } = useViewContext()
+  const effectiveView = mediaFilter !== "all" ? "grid" : viewMode
   const { allArtifacts, addArtifact, removeArtifact, localCount } = useArtifacts()
 
   const containerRef   = useRef<HTMLDivElement>(null)
@@ -96,6 +97,12 @@ export function FragmentField() {
       .map(id => allArtifacts.find(a => a.id === id)!)
       .filter(Boolean)
   }, [allArtifacts, displayOrder])
+
+  const visibleArtifacts = useMemo(() => {
+    if (mediaFilter === "all") return orderedArtifacts
+    if (mediaFilter === "words") return orderedArtifacts.filter(a => a.type === "text" || a.type === "found text")
+    return orderedArtifacts.filter(a => a.media.type === mediaFilter)
+  }, [orderedArtifacts, mediaFilter])
 
   // Load stored order after hydration to avoid server/client mismatch
   useEffect(() => {
@@ -138,13 +145,13 @@ export function FragmentField() {
     if (viewMode !== "single") return
     const handleKey = (e: KeyboardEvent) => {
       if (expandedId) return
-      const len = orderedArtifacts.length
+      const len = visibleArtifacts.length
       if (e.key === "ArrowLeft")  setSingleIndex(i => (i - 1 + len) % len)
       if (e.key === "ArrowRight") setSingleIndex(i => (i + 1) % len)
     }
     window.addEventListener("keydown", handleKey)
     return () => window.removeEventListener("keydown", handleKey)
-  }, [viewMode, orderedArtifacts.length, expandedId])
+  }, [viewMode, visibleArtifacts.length, expandedId])
 
   // Deposit form event
   useEffect(() => {
@@ -241,14 +248,14 @@ export function FragmentField() {
     ? (orderedArtifacts.find(a => a.id === expandedId) ?? null)
     : null
 
-  const safeIndex = orderedArtifacts.length > 0
-    ? Math.min(singleIndex, orderedArtifacts.length - 1)
+  const safeIndex = visibleArtifacts.length > 0
+    ? Math.min(singleIndex, visibleArtifacts.length - 1)
     : 0
 
   return (
     <>
       {/* ── CHAOS ─────────────────────────────────────────────── */}
-      {viewMode === "chaos" && (
+      {effectiveView === "chaos" && (
         <div
           ref={containerRef}
           className="relative w-full min-h-[1800px] md:min-h-[1400px]"
@@ -257,7 +264,7 @@ export function FragmentField() {
           onPointerCancel={handlePointerUp}
           onPointerLeave={handlePointerUp}
         >
-          {orderedArtifacts.map((artifact, index) => {
+          {visibleArtifacts.map((artifact, index) => {
             const pos       = positions[artifact.id] ?? fallbackPosition(artifact.id)
             const isDeleting = deletingId === artifact.id
             return (
@@ -286,7 +293,7 @@ export function FragmentField() {
           })}
 
           <div className="absolute bottom-4 right-4 text-[10px] text-muted-foreground/40 pointer-events-none">
-            showing {orderedArtifacts.length} of ∞ fragments
+            showing {visibleArtifacts.length} of ∞ fragments
           </div>
           <div className="absolute bottom-4 left-4 text-[10px] text-muted-foreground/30 pointer-events-none">
             drag to rearrange
@@ -295,10 +302,10 @@ export function FragmentField() {
       )}
 
       {/* ── GRID ──────────────────────────────────────────────── */}
-      {viewMode === "grid" && (
+      {effectiveView === "grid" && (
         <div className="p-6">
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-            {orderedArtifacts.map(artifact => {
+            {visibleArtifacts.map(artifact => {
               const isDeleting = deletingId === artifact.id
               return (
                 <div
@@ -315,27 +322,27 @@ export function FragmentField() {
       )}
 
       {/* ── SINGLE ────────────────────────────────────────────── */}
-      {viewMode === "single" && orderedArtifacts.length > 0 && (
+      {effectiveView === "single" && visibleArtifacts.length > 0 && (
         <div className="h-full flex flex-col items-center justify-center p-8 md:p-12 overflow-hidden">
           <div
             className="w-full max-w-2xl cursor-pointer"
-            onClick={() => setExpandedId(orderedArtifacts[safeIndex].id)}
+            onClick={() => setExpandedId(visibleArtifacts[safeIndex].id)}
           >
-            {card(orderedArtifacts[safeIndex], "single")}
+            {card(visibleArtifacts[safeIndex], "single")}
           </div>
 
           <div className="mt-6 flex items-center gap-8 text-[10px] text-muted-foreground select-none flex-none">
             <button
-              onClick={() => setSingleIndex(i => (i - 1 + orderedArtifacts.length) % orderedArtifacts.length)}
+              onClick={() => setSingleIndex(i => (i - 1 + visibleArtifacts.length) % visibleArtifacts.length)}
               className="hover:text-foreground transition-colors"
             >
               ← prev
             </button>
             <span className="text-muted-foreground/40 tabular-nums">
-              {safeIndex + 1} / {orderedArtifacts.length}
+              {safeIndex + 1} / {visibleArtifacts.length}
             </span>
             <button
-              onClick={() => setSingleIndex(i => (i + 1) % orderedArtifacts.length)}
+              onClick={() => setSingleIndex(i => (i + 1) % visibleArtifacts.length)}
               className="hover:text-foreground transition-colors"
             >
               next →

@@ -50,13 +50,13 @@ export function AudioPlayer({ src, title }: { src: string; title?: string }) {
 
   return (
     <div
-      className="min-w-[220px] p-4 select-none"
+      className="min-w-[220px] bg-neutral-900 p-4 select-none"
       onPointerDown={e => e.stopPropagation()}
     >
       <audio ref={audioRef} src={src} preload="metadata" />
 
       {title && (
-        <div className="mb-3 text-[10px] text-foreground leading-snug">
+        <div className="mb-3 text-sm text-white leading-snug">
           {title}
         </div>
       )}
@@ -64,30 +64,30 @@ export function AudioPlayer({ src, title }: { src: string; title?: string }) {
       <div className="flex items-center gap-3">
         <button
           onClick={toggle}
-          className="w-4 text-[13px] text-foreground hover:opacity-50 transition-opacity leading-none text-center"
+          className="w-4 text-[13px] text-neutral-100 hover:opacity-50 transition-opacity leading-none text-center"
           aria-label={playing ? "pause" : "play"}
         >
           {playing ? "⏸" : "▶"}
         </button>
         <button
           onClick={e => { e.stopPropagation(); const el = audioRef.current; if (!el) return; el.currentTime = 0; el.play(); setPlaying(true); setCurrent(0) }}
-          className="text-[13px] text-foreground hover:opacity-50 transition-opacity leading-none"
+          className="text-[13px] text-neutral-100 hover:opacity-50 transition-opacity leading-none"
           aria-label="restart"
         >
           ↺
         </button>
-        <span className="text-[10px] font-mono text-muted-foreground tabular-nums">
+        <span className="text-[10px] font-mono text-neutral-500 tabular-nums">
           {fmt(current)}&thinsp;/&thinsp;{fmt(duration)}
         </span>
       </div>
 
       <div
-        className="mt-3 h-px bg-border cursor-pointer relative"
+        className="mt-3 h-px bg-neutral-700 cursor-pointer relative"
         onClick={seek}
         onPointerDown={e => e.stopPropagation()}
       >
         <div
-          className="absolute inset-y-0 left-0 bg-foreground transition-none"
+          className="absolute inset-y-0 left-0 bg-neutral-300 transition-none"
           style={{ width: `${pct}%` }}
         />
       </div>

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react"
 import { motion } from "motion/react"
-import { DEPOSIT_TYPES, type Artifact, type ArtifactType } from "@/lib/artifacts"
+import { type Artifact } from "@/lib/artifacts"
 import { getMediaTypeForFile, isValidFile, ACCEPT_ATTR } from "@/lib/artifact-validation"
 import { generateLocalId } from "@/lib/use-artifacts"
 
@@ -12,22 +12,20 @@ interface DepositFormProps {
   onClose: () => void
 }
 
+type Tab = "media" | "words"
+
 interface FormState {
-  type: ArtifactType
   title: string
-  dateRaw: string
-  source: string
   notes: string
-  textContent: string
 }
 
 const INITIAL: FormState = {
-  type: "photograph",
   title: "",
-  dateRaw: "",
-  source: "",
   notes: "",
-  textContent: "",
+}
+
+function formatUploadDate(date: Date): string {
+  return date.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })
 }
 
 function fileToDataUrl(file: File): Promise<string> {
@@ -39,24 +37,30 @@ function fileToDataUrl(file: File): Promise<string> {
   })
 }
 
+function deriveTitle(text: string): string {
+  const first = text.trim().split(/\n/)[0].trim()
+  return first.length > 80 ? first.slice(0, 77) + "…" : first || "untitled"
+}
+
 export function DepositForm({ localCount, onSubmit, onClose }: DepositFormProps) {
-  const [form, setForm] = useState<FormState>(INITIAL)
-  const [file, setFile] = useState<File | null>(null)
-  const [fileError, setFileError] = useState<string | null>(null)
+  const [tab,         setTab]         = useState<Tab>("media")
+  const [form,        setForm]        = useState<FormState>(INITIAL)
+  const [file,        setFile]        = useState<File | null>(null)
+  const [fileError,   setFileError]   = useState<string | null>(null)
+  const [wordText,    setWordText]    = useState("")
+  const [wordTitle,   setWordTitle]   = useState("")
   const [submitError, setSubmitError] = useState<string | null>(null)
-  const [submitting, setSubmitting] = useState(false)
+  const [submitting,  setSubmitting]  = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose()
-    }
-    window.addEventListener("keydown", handleKeyDown)
-    return () => window.removeEventListener("keydown", handleKeyDown)
+    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose() }
+    window.addEventListener("keydown", handler)
+    return () => window.removeEventListener("keydown", handler)
   }, [onClose])
 
   function set<K extends keyof FormState>(key: K, value: FormState[K]) {
-    setForm((prev) => ({ ...prev, [key]: value }))
+    setForm(prev => ({ ...prev, [key]: value }))
   }
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -71,38 +75,55 @@ export function DepositForm({ localCount, onSubmit, onClose }: DepositFormProps)
     setFile(f)
   }
 
-  const isFoundText = form.type === "found text" || form.type === "text"
+  const canSubmit = tab === "media"
+    ? form.title.trim().length > 0
+    : wordText.trim().length > 0
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (!form.title.trim()) return
+    if (!canSubmit) return
     setSubmitting(true)
     setSubmitError(null)
 
     try {
-      let mediaType: Artifact["media"]["type"] = "none"
-      let mediaUrl: string | undefined
+      let artifact: Artifact
 
-      if (file) {
-        const detected = getMediaTypeForFile(file.name)
-        if (detected && detected !== "text") {
-          mediaType = detected
-          mediaUrl = await fileToDataUrl(file)
+      const uploadedAt = formatUploadDate(new Date())
+
+      if (tab === "words") {
+        artifact = {
+          id: generateLocalId(localCount),
+          type: "found text",
+          title: wordTitle.trim() || deriveTitle(wordText),
+          dateRaw: "",
+          uploadedAt,
+          description: wordText.trim(),
+          media: { type: "none" },
+          status: "published",
         }
-      }
+      } else {
+        let mediaType: Artifact["media"]["type"] = "none"
+        let mediaUrl: string | undefined
 
-      const artifact: Artifact = {
-        id: generateLocalId(localCount),
-        type: form.type,
-        title: form.title.trim(),
-        dateRaw: form.dateRaw.trim() || "date unknown",
-        source: form.source.trim() || undefined,
-        notes: form.notes.trim() || undefined,
-        description: isFoundText
-          ? form.textContent.trim() || form.title.trim()
-          : form.title.trim(),
-        media: { type: mediaType, url: mediaUrl },
-        status: "published",
+        if (file) {
+          const detected = getMediaTypeForFile(file.name)
+          if (detected && detected !== "text") {
+            mediaType = detected
+            mediaUrl = await fileToDataUrl(file)
+          }
+        }
+
+        artifact = {
+          id: generateLocalId(localCount),
+          type: "unknown",
+          title: form.title.trim(),
+          dateRaw: "",
+          uploadedAt,
+          notes: form.notes.trim() || undefined,
+          description: form.title.trim(),
+          media: { type: mediaType, url: mediaUrl },
+          status: "published",
+        }
       }
 
       onSubmit(artifact)
@@ -139,140 +160,114 @@ export function DepositForm({ localCount, onSubmit, onClose }: DepositFormProps)
           transition={{ duration: 0.2 }}
         >
           <form onSubmit={handleSubmit}>
-            <div className="p-6 space-y-5">
-              <div className="text-[10px] uppercase tracking-widest text-foreground">
-                deposit fragment
-              </div>
 
-              {/* Type */}
-              <div className="space-y-1">
-                <label className="text-[10px] uppercase tracking-widest text-muted-foreground">
-                  type
-                </label>
-                <select
-                  value={form.type}
-                  onChange={(e) => set("type", e.target.value as ArtifactType)}
-                  className="w-full bg-transparent border border-border text-[11px] text-foreground px-2 py-1.5 focus:outline-none focus:border-foreground/50"
+            {/* Tabs */}
+            <div className="flex border-b border-border">
+              {(["media", "words"] as Tab[]).map(t => (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => setTab(t)}
+                  className={`flex-1 py-3 text-[10px] uppercase tracking-widest transition-colors duration-150 ${
+                    tab === t
+                      ? "bg-black text-white"
+                      : "text-muted-foreground/50 hover:text-muted-foreground bg-background"
+                  }`}
                 >
-                  {DEPOSIT_TYPES.map((t) => (
-                    <option key={t} value={t}>
-                      {t}
-                    </option>
-                  ))}
-                </select>
-              </div>
+                  {t}
+                </button>
+              ))}
+            </div>
 
-              {/* Title */}
-              <div className="space-y-1">
-                <label className="text-[10px] uppercase tracking-widest text-muted-foreground">
-                  title <span className="normal-case tracking-normal">*</span>
-                </label>
-                <input
-                  required
-                  type="text"
-                  value={form.title}
-                  onChange={(e) => set("title", e.target.value)}
-                  className="w-full bg-transparent border border-border text-[11px] text-foreground px-2 py-1.5 focus:outline-none focus:border-foreground/50 placeholder:text-muted-foreground/40"
-                  placeholder="untitled"
-                />
-              </div>
+            {/* Tab content — fixed height so the modal doesn't resize between tabs */}
+            <div className="h-[480px] overflow-y-auto">
 
-              {/* Date */}
-              <div className="space-y-1">
-                <label className="text-[10px] uppercase tracking-widest text-muted-foreground">
-                  approximate date
-                </label>
-                <input
-                  type="text"
-                  value={form.dateRaw}
-                  onChange={(e) => set("dateRaw", e.target.value)}
-                  className="w-full bg-transparent border border-border text-[11px] text-foreground px-2 py-1.5 focus:outline-none focus:border-foreground/50 placeholder:text-muted-foreground/40"
-                  placeholder="c. 1990s, 2004, unknown"
-                />
-              </div>
+            {/* ── MEDIA TAB ── */}
+            {tab === "media" && (
+              <div className="p-6 space-y-5">
 
-              {/* Source */}
-              <div className="space-y-1">
-                <label className="text-[10px] uppercase tracking-widest text-muted-foreground">
-                  source / provenance
-                </label>
-                <input
-                  type="text"
-                  value={form.source}
-                  onChange={(e) => set("source", e.target.value)}
-                  className="w-full bg-transparent border border-border text-[11px] text-foreground px-2 py-1.5 focus:outline-none focus:border-foreground/50 placeholder:text-muted-foreground/40"
-                  placeholder="estate sale, personal photograph, unknown"
-                />
-              </div>
-
-              {/* Notes */}
-              <div className="space-y-1">
-                <label className="text-[10px] uppercase tracking-widest text-muted-foreground">
-                  notes
-                </label>
-                <textarea
-                  value={form.notes}
-                  onChange={(e) => set("notes", e.target.value)}
-                  rows={3}
-                  className="w-full bg-transparent border border-border text-[11px] text-foreground px-2 py-1.5 focus:outline-none focus:border-foreground/50 placeholder:text-muted-foreground/40 resize-none"
-                  placeholder="any contextual observations"
-                />
-              </div>
-
-              {/* Found text content */}
-              {isFoundText && (
-                <div className="space-y-1">
-                  <label className="text-[10px] uppercase tracking-widest text-muted-foreground">
-                    text content
-                  </label>
-                  <textarea
-                    value={form.textContent}
-                    onChange={(e) => set("textContent", e.target.value)}
-                    rows={5}
-                    className="w-full bg-transparent border border-border text-[11px] text-foreground px-2 py-1.5 focus:outline-none focus:border-foreground/50 placeholder:text-muted-foreground/40 resize-none"
-                    placeholder="paste or type the found text"
+                {/* File zone — prominent */}
+                <div>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept={ACCEPT_ATTR}
+                    onChange={handleFileChange}
+                    className="hidden"
                   />
-                </div>
-              )}
-
-              {/* File upload */}
-              <div className="space-y-1">
-                <label className="text-[10px] uppercase tracking-widest text-muted-foreground">
-                  file
-                </label>
-                <div className="flex items-center gap-3">
                   <button
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
-                    className="text-[10px] border border-border px-3 py-1.5 text-muted-foreground hover:text-foreground hover:border-foreground/50 transition-colors"
+                    className="w-full border border-dashed border-border bg-foreground/[0.03] hover:bg-foreground/[0.06] hover:border-foreground/40 transition-colors duration-150 py-10 flex flex-col items-center justify-center gap-2 text-center"
                   >
-                    {file ? "change file" : "attach file"}
+                    {file ? (
+                      <>
+                        <span className="text-xs text-foreground font-medium truncate max-w-[260px]">{file.name}</span>
+                        <span className="text-[10px] text-muted-foreground/50">click to change</span>
+                      </>
+                    ) : (
+                      <>
+                        <span className="text-xs text-foreground/60">attach file</span>
+                        <span className="text-[10px] text-muted-foreground/40">image · video · audio · text</span>
+                      </>
+                    )}
                   </button>
-                  {file && (
-                    <span className="text-[10px] text-muted-foreground truncate max-w-[180px]">
-                      {file.name}
-                    </span>
-                  )}
+                  {fileError && <div className="mt-1 text-[10px] text-red-500/70">{fileError}</div>}
                 </div>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept={ACCEPT_ATTR}
-                  onChange={handleFileChange}
-                  className="hidden"
-                />
-                {fileError && (
-                  <div className="text-[10px] text-red-500/70">{fileError}</div>
-                )}
-                <div className="text-[10px] text-muted-foreground/40">
-                  jpg, png, webp, heic, tiff — mp4, mov, webm — mp3, wav, flac — txt, md, pdf
-                </div>
-              </div>
 
-              {submitError && (
-                <div className="text-[10px] text-red-500/70">{submitError}</div>
-              )}
-            </div>
+                {/* Title */}
+                <div className="space-y-1">
+                  <label className="text-[10px] uppercase tracking-widest text-muted-foreground">
+                    title <span className="normal-case tracking-normal">*</span>
+                  </label>
+                  <input
+                    required
+                    type="text"
+                    value={form.title}
+                    onChange={e => set("title", e.target.value)}
+                    className="w-full bg-transparent border border-border text-[11px] text-foreground px-2 py-1.5 focus:outline-none focus:border-foreground/50 placeholder:text-muted-foreground/40"
+                    placeholder="untitled"
+                  />
+                </div>
+
+                {/* Notes */}
+                <div className="space-y-1">
+                  <label className="text-[10px] uppercase tracking-widest text-muted-foreground">notes</label>
+                  <textarea
+                    value={form.notes}
+                    onChange={e => set("notes", e.target.value)}
+                    rows={3}
+                    className="w-full bg-transparent border border-border text-[11px] text-foreground px-2 py-1.5 focus:outline-none focus:border-foreground/50 placeholder:text-muted-foreground/40 resize-none"
+                    placeholder="any contextual observations"
+                  />
+                </div>
+
+                {submitError && <div className="text-[10px] text-red-500/70">{submitError}</div>}
+              </div>
+            )}
+
+            {/* ── WORDS TAB ── */}
+            {tab === "words" && (
+              <div className="p-6 h-full flex flex-col gap-4">
+                <input
+                  type="text"
+                  value={wordTitle}
+                  onChange={e => setWordTitle(e.target.value)}
+                  className="w-full bg-transparent border-b border-border text-[11px] text-foreground pb-2 focus:outline-none focus:border-foreground/50 placeholder:text-muted-foreground/30"
+                  placeholder="title (optional)"
+                />
+                <textarea
+                  value={wordText}
+                  onChange={e => setWordText(e.target.value)}
+                  autoFocus
+                  className="w-full flex-1 bg-transparent text-[13px] text-foreground focus:outline-none placeholder:text-muted-foreground/30 resize-none leading-relaxed"
+                  placeholder="write here…"
+                />
+                {submitError && <div className="text-[10px] text-red-500/70">{submitError}</div>}
+              </div>
+            )}
+
+            </div>{/* end fixed-height content wrapper */}
 
             {/* Footer */}
             <div className="px-6 pb-5 flex items-center justify-between border-t border-border pt-4">
@@ -285,12 +280,13 @@ export function DepositForm({ localCount, onSubmit, onClose }: DepositFormProps)
               </button>
               <button
                 type="submit"
-                disabled={submitting || !form.title.trim()}
+                disabled={submitting || !canSubmit}
                 className="text-[10px] border border-border px-4 py-1.5 text-foreground hover:bg-foreground hover:text-background transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 {submitting ? "depositing…" : "deposit"}
               </button>
             </div>
+
           </form>
         </motion.div>
       </div>

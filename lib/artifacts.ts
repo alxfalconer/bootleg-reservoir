@@ -34,6 +34,7 @@ export interface Artifact {
   dateYear?: number
   source?: string
   notes?: string
+  uploadedAt?: string
   description: string
   technical?: {
     dimensions?: string
@@ -54,6 +55,7 @@ export const artifacts: Artifact[] = [
     type: "film still",
     title: "Sex education scene",
     dateRaw: "c. 1998",
+    uploadedAt: "March 12, 2026",
     dateYear: 1998,
     source: "VHS transfer, romantic comedy",
     notes: "Teacher at chalkboard. Film unidentified. Possibly promotional still.",
@@ -70,6 +72,7 @@ export const artifacts: Artifact[] = [
     type: "painting",
     title: "Crucifixion (folk)",
     dateRaw: "Unknown, possibly 1970s",
+    uploadedAt: "January 28, 2026",
     source: "Estate sale, Phoenix AZ",
     notes:
       "Mixed media on board. INRI inscription. Nail holes visible at corners suggest previous display.",
@@ -86,6 +89,7 @@ export const artifacts: Artifact[] = [
     type: "vhs",
     title: "Healing service broadcast",
     dateRaw: "1989–1992",
+    uploadedAt: "February 7, 2026",
     dateYear: 1989,
     source: "VHS-C, labeled 'CHURCH TAPES VOL. 3'",
     notes: "Man slain in the spirit. Preacher continues speaking. Time code visible.",
@@ -102,6 +106,7 @@ export const artifacts: Artifact[] = [
     type: "film still",
     title: "Desert, moonrise",
     dateRaw: "1973",
+    uploadedAt: "April 3, 2026",
     dateYear: 1973,
     source: "Film frame capture, 35mm",
     notes: "Figure walking toward horizon. Malick? Unconfirmed.",
@@ -118,6 +123,7 @@ export const artifacts: Artifact[] = [
     type: "film still",
     title: "Metro escalator",
     dateRaw: "c. 2006",
+    uploadedAt: "March 19, 2026",
     dateYear: 2006,
     source: "Digital capture, unknown film",
     notes: "Wide angle lens distortion. Station appears to be East Asian. Woman descending.",
@@ -134,6 +140,7 @@ export const artifacts: Artifact[] = [
     type: "vhs",
     title: "Confession broadcast",
     dateRaw: "February 21, 1988",
+    uploadedAt: "May 2, 2026",
     dateYear: 1988,
     source: "Off-air recording, Channel 9",
     notes: "Live television confession. Tracking lines visible. Someone was recording.",
@@ -150,6 +157,7 @@ export const artifacts: Artifact[] = [
     type: "video",
     title: "Fragment, phone recording",
     dateRaw: "2024",
+    uploadedAt: "January 15, 2026",
     dateYear: 2024,
     source: "Airdrop, unknown sender",
     notes: "Received at coffee shop. No context. Portrait orientation.",
@@ -166,6 +174,7 @@ export const artifacts: Artifact[] = [
     type: "film still",
     title: "Radio studio, period",
     dateRaw: "1930s (depicted), film unknown",
+    uploadedAt: "April 22, 2026",
     source: "Screenshot, streaming service",
     notes: "Actor with vintage microphone. Paisley robe. Golden age of radio recreation.",
     description: "Studio interior, dramatic lighting, male figure at microphone",
@@ -181,6 +190,7 @@ export const artifacts: Artifact[] = [
     type: "document",
     title: "Fotomosaico de Suelos, Plancha No. 2",
     dateRaw: "1977",
+    uploadedAt: "February 14, 2026",
     dateYear: 1977,
     source: "Instituto Geografico Agustin Codazzi, Colombia",
     notes:
@@ -198,6 +208,7 @@ export const artifacts: Artifact[] = [
     type: "screenshot",
     title: "ETERNAL BECOMING",
     dateRaw: "Unknown, c. 2010s",
+    uploadedAt: "May 30, 2026",
     dateYear: 2010,
     source: "Video still, source unidentified",
     notes: "Inverted triangle, luminous. New age or spiritual content. Found on dead hard drive.",
@@ -214,6 +225,7 @@ export const artifacts: Artifact[] = [
     type: "collage",
     title: "Natural History (Fungi)",
     dateRaw: "c. 1980",
+    uploadedAt: "March 5, 2026",
     dateYear: 1980,
     source: "Mixed media on paper, artist unknown",
     notes:
@@ -231,6 +243,7 @@ export const artifacts: Artifact[] = [
     type: "drawing",
     title: "Landscape Analysis (thesis fragment)",
     dateRaw: "c. 1990s",
+    uploadedAt: "April 11, 2026",
     dateYear: 1990,
     source: "Architecture school archive, institution unknown",
     notes:
@@ -248,6 +261,7 @@ export const artifacts: Artifact[] = [
     type: "photograph",
     title: "Church sign, Nealy Hicks Rd",
     dateRaw: "2019",
+    uploadedAt: "June 1, 2026",
     dateYear: 2019,
     source: "Personal photograph, passing car",
     notes:

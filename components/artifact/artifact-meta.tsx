@@ -8,15 +8,9 @@ interface ArtifactMetaProps {
 export function ArtifactMeta({ artifact, expanded }: ArtifactMetaProps) {
   return (
     <div className="space-y-0.5 break-words">
-      <div className="text-[8px] uppercase tracking-widest text-muted-foreground mb-1">
-        {artifact.type}
-      </div>
       <div className="text-xs text-foreground">{artifact.title}</div>
-      <div className="text-[10px] text-muted-foreground">{artifact.dateRaw}</div>
-      {artifact.source && (
-        <div className="text-[10px] text-muted-foreground">
-          src: {artifact.source}
-        </div>
+      {artifact.uploadedAt && (
+        <div className="text-[10px] text-muted-foreground">{artifact.uploadedAt}</div>
       )}
 
       {expanded && (

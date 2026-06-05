@@ -12,6 +12,8 @@ interface ArtifactDetailProps {
 }
 
 export function ArtifactDetail({ artifact, onClose }: ArtifactDetailProps) {
+  const isText = artifact.type === "text" || artifact.type === "found text"
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose()
@@ -35,7 +37,7 @@ export function ArtifactDetail({ artifact, onClose }: ArtifactDetailProps) {
       {/* Centering shell — min-h-full + items-center centers short content; scrolls tall content from top */}
       <div className="flex min-h-full items-center justify-center p-8 md:p-16">
       {/* Content panel */}
-      <div className="relative z-10 max-w-2xl w-fit">
+      <div className={`relative z-10 ${isText ? "max-w-2xl w-full" : "max-w-2xl w-fit"}`}>
         {/* Media — shared element, flies from card position */}
         <motion.div
           layoutId={`media-${artifact.id}`}
@@ -43,7 +45,8 @@ export function ArtifactDetail({ artifact, onClose }: ArtifactDetailProps) {
         >
           <ArtifactMedia
             artifact={artifact}
-            className="max-h-[60vh] w-auto block mx-auto"
+            className={isText ? undefined : "max-h-[60vh] w-auto block mx-auto"}
+            expanded
           />
         </motion.div>
 

@@ -5,9 +5,36 @@ import { AudioPlayer } from "./audio-player"
 interface ArtifactMediaProps {
   artifact: Artifact
   className?: string
+  expanded?: boolean
 }
 
-export function ArtifactMedia({ artifact, className }: ArtifactMediaProps) {
+export function ArtifactMedia({ artifact, className, expanded }: ArtifactMediaProps) {
+  const isText = artifact.type === "text" || artifact.type === "found text"
+  if (isText && artifact.description) {
+    if (expanded) {
+      return (
+        <div
+          className="bg-white p-8 w-full"
+          style={{ fontFamily: "var(--font-display)" }}
+        >
+          <p className="text-xl font-normal leading-relaxed text-black whitespace-pre-wrap" style={{ fontFamily: "Georgia, 'Times New Roman', serif" }}>
+            {artifact.description}
+          </p>
+        </div>
+      )
+    }
+    return (
+      <div
+        className="bg-white p-6 w-64 mx-auto overflow-hidden"
+        style={{ fontFamily: "var(--font-display)", aspectRatio: "8.5 / 11" }}
+      >
+        <p className="text-sm font-normal leading-relaxed text-black line-clamp-[13]" style={{ fontFamily: "Georgia, 'Times New Roman', serif" }}>
+          {artifact.description}
+        </p>
+      </div>
+    )
+  }
+
   if (artifact.media.type === "image" && artifact.media.url) {
     return (
       <img
@@ -28,14 +55,6 @@ export function ArtifactMedia({ artifact, className }: ArtifactMediaProps) {
         playsInline
         autoPlay
       />
-    )
-  }
-
-  if (artifact.type === "text") {
-    return (
-      <p className="text-xs leading-relaxed whitespace-pre-wrap p-3">
-        {artifact.description}
-      </p>
     )
   }
 

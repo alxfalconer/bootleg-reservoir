@@ -3,12 +3,15 @@
 import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from "react"
 
 export type ViewMode = "chaos" | "grid" | "single"
+export type MediaFilter = "all" | "image" | "video" | "audio" | "words"
 
 interface ViewContextValue {
   viewMode: ViewMode
   setViewMode: (mode: ViewMode) => void
   shuffleSignal: number
   triggerShuffle: () => void
+  mediaFilter: MediaFilter
+  setMediaFilter: (f: MediaFilter) => void
 }
 
 const ViewContext = createContext<ViewContextValue | null>(null)
@@ -16,6 +19,7 @@ const ViewContext = createContext<ViewContextValue | null>(null)
 export function ViewProvider({ children }: { children: ReactNode }) {
   const [viewMode, setViewModeState] = useState<ViewMode>("chaos")
   const [shuffleSignal, setShuffleSignal] = useState(0)
+  const [mediaFilter, setMediaFilterState] = useState<MediaFilter>("all")
 
   useEffect(() => {
     try {
@@ -31,8 +35,10 @@ export function ViewProvider({ children }: { children: ReactNode }) {
 
   const triggerShuffle = useCallback(() => setShuffleSignal(n => n + 1), [])
 
+  const setMediaFilter = useCallback((f: MediaFilter) => setMediaFilterState(f), [])
+
   return (
-    <ViewContext.Provider value={{ viewMode, setViewMode, shuffleSignal, triggerShuffle }}>
+    <ViewContext.Provider value={{ viewMode, setViewMode, shuffleSignal, triggerShuffle, mediaFilter, setMediaFilter }}>
       {children}
     </ViewContext.Provider>
   )

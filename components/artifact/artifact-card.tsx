@@ -17,6 +17,7 @@ interface ArtifactCardProps {
 export function ArtifactCard({ artifact, isExpanded, isDeleting, onDelete, variant = "default" }: ArtifactCardProps) {
   const isGrid   = variant === "grid" || variant === "single"
   const isSingle = variant === "single"
+  const isText   = artifact.type === "text" || artifact.type === "found text"
 
   return (
     <div className="group select-none">
@@ -41,7 +42,7 @@ export function ArtifactCard({ artifact, isExpanded, isDeleting, onDelete, varia
           </motion.div>
         )}
 
-        {/* Metadata fades separately, slightly after the media degradation begins */}
+        {/* Metadata */}
         <motion.div
           className="mt-2 px-2 py-1 w-full overflow-hidden space-y-0.5 transition-colors duration-200 group-hover:bg-white"
           animate={{ opacity: isDeleting ? 0 : 1 }}

@@ -1,41 +1,64 @@
 "use client"
 
-import { useViewContext, type ViewMode } from "@/lib/view-context"
+import { useViewContext, type ViewMode, type MediaFilter } from "@/lib/view-context"
 
 const MODES: { value: ViewMode; label: string }[] = [
-  { value: "chaos",  label: "chaos"  },
-  { value: "grid",   label: "grid"   },
-  { value: "single", label: "single" },
+  { value: "chaos", label: "chaos" },
+  { value: "grid",  label: "order" },
+]
+
+const FILTERS: { value: MediaFilter; label: string }[] = [
+  { value: "all",   label: "all"   },
+  { value: "image", label: "image" },
+  { value: "video", label: "video" },
+  { value: "audio", label: "audio" },
+  { value: "words", label: "words" },
 ]
 
 export function ViewControls() {
-  const { viewMode, setViewMode, triggerShuffle } = useViewContext()
+  const { viewMode, setViewMode, triggerShuffle, mediaFilter, setMediaFilter } = useViewContext()
 
   return (
-    <div className="fixed bottom-5 right-5 md:bottom-7 md:right-7 z-[55] flex items-center gap-0.5 rounded-full border border-foreground/[0.08] bg-background/80 backdrop-blur-md shadow-md p-1">
+    <div className="fixed bottom-5 right-5 md:bottom-7 md:right-7 z-[55] border border-foreground/[0.08] bg-white shadow-md">
 
-      {MODES.map(({ value, label }) => (
+      {/* View mode */}
+      <div className="flex items-center gap-6 px-6 py-2">
+        {MODES.map(({ value, label }) => (
+          <button
+            key={value}
+            onClick={() => setViewMode(value)}
+            className={`text-[10px] font-bold tracking-wide transition-colors duration-150 ${
+              viewMode === value ? "bg-foreground/5 text-foreground px-2 py-0.5" : "text-foreground/40 hover:text-foreground/60"
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+
         <button
-          key={value}
-          onClick={() => setViewMode(value)}
-          className={`rounded-full px-3 py-1.5 text-[10px] tracking-wide transition-all duration-150 ${
-            viewMode === value
-              ? "bg-foreground/[0.07] text-foreground"
-              : "text-foreground/40 hover:text-foreground/60"
-          }`}
+          onClick={triggerShuffle}
+          className="group/shuffle transition-colors duration-150"
         >
-          {label}
+          <img src="/shuffle.svg" alt="shuffle" className="w-4 h-4 opacity-40 group-hover/shuffle:opacity-60" />
         </button>
-      ))}
+      </div>
 
-      <div className="mx-1 h-3 w-px bg-foreground/[0.12]" />
+      <div className="border-t border-foreground/[0.08]" />
 
-      <button
-        onClick={triggerShuffle}
-        className="rounded-full px-3 py-1.5 text-[10px] tracking-wide text-foreground/40 transition-colors duration-150 hover:text-foreground/60"
-      >
-        shuffle
-      </button>
+      {/* Media type filter */}
+      <div className="flex items-center gap-6 px-6 py-2">
+        {FILTERS.map(({ value, label }) => (
+          <button
+            key={value}
+            onClick={() => setMediaFilter(value)}
+            className={`text-[10px] font-bold tracking-wide transition-colors duration-150 ${
+              mediaFilter === value ? "bg-foreground/5 text-foreground px-2 py-0.5" : "text-foreground/40 hover:text-foreground/60"
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
 
     </div>
   )
