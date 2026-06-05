@@ -28,7 +28,7 @@ export function ReservoirSidebar() {
   return (
     <aside
       className="group/panel relative hidden md:flex flex-none flex-col border-r border-border bg-background overflow-hidden transition-[width] duration-300 ease-in-out"
-      style={{ width: isCollapsed ? "56px" : "clamp(280px, 20vw, 420px)" }}
+      style={{ width: isCollapsed ? "56px" : "clamp(220px, 16vw, 320px)" }}
     >
       {/* ── COLLAPSED RAIL ─────────────────────────────── */}
       <div
@@ -65,14 +65,14 @@ export function ReservoirSidebar() {
           opacity:         isCollapsed ? 0 : 1,
           pointerEvents:   isCollapsed ? "none" : "auto",
           transitionDelay: isCollapsed ? "0ms" : "150ms",
-          minWidth: "280px",
+          minWidth: "220px",
         }}
       >
         {/* Title + collapse trigger */}
         <div className="flex items-start justify-between">
           <div className="space-y-1">
             <h1 className="text-sm font-bold tracking-tight">Reservoir</h1>
-            <p className="text-[10px] text-muted-foreground italic">When you cut into the present the future leaks out.</p>
+            <p className="text-[10px] text-muted-foreground italic">When you cut into the present<br />the future leaks out.</p>
           </div>
           <button
             onClick={toggleSidebar}
@@ -84,8 +84,8 @@ export function ReservoirSidebar() {
         </div>
 
         {/* Manifesto */}
-        <div className="mt-10 space-y-6">
-          <div className="space-y-4 text-xs leading-relaxed text-foreground/90">
+        <div className="mt-7 space-y-5">
+          <div className="space-y-3 text-xs leading-relaxed text-foreground/90">
             <p>
               If you&apos;re here I either admire your taste or consider it so atrocious that it enters visionary territory.
             </p>
@@ -96,15 +96,15 @@ export function ReservoirSidebar() {
               Aimless collection breeds odd connections, inspiration. Blessings.
             </p>
           </div>
-          <div className="mt-10">
+          <div>
             <DepositTrigger />
           </div>
 
         </div>
 
-        {/* Bottom — invite only / signed in state */}
-        <div className="mt-auto pt-10 space-y-2">
-          {user ? (
+        {/* Bottom — signed in state */}
+        {user && (
+          <div className="mt-auto pt-10">
             <div className="flex items-center justify-between">
               <div className="text-[10px] text-muted-foreground/60 truncate max-w-[160px]">
                 {user.email}
@@ -116,13 +116,8 @@ export function ReservoirSidebar() {
                 sign out
               </button>
             </div>
-          ) : (
-            <div className="text-[10px] text-muted-foreground/60">
-              <span className="inline-block w-2 h-2 bg-muted-foreground/30 mr-1" />
-              invite only
-            </div>
-          )}
-        </div>
+          </div>
+        )}
       </div>
     </aside>
   )
