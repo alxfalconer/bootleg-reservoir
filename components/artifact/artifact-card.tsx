@@ -11,10 +11,11 @@ interface ArtifactCardProps {
   isDragging: boolean
   isDeleting?: boolean
   onDelete?: () => void
+  onPublish?: () => void
   variant?: "default" | "grid" | "single"
 }
 
-export function ArtifactCard({ artifact, isExpanded, isDeleting, onDelete, variant = "default" }: ArtifactCardProps) {
+export function ArtifactCard({ artifact, isExpanded, isDeleting, onDelete, onPublish, variant = "default" }: ArtifactCardProps) {
   const isGrid   = variant === "grid" || variant === "single"
   const isSingle = variant === "single"
   const isText   = artifact.type === "text" || artifact.type === "found text"
@@ -49,14 +50,30 @@ export function ArtifactCard({ artifact, isExpanded, isDeleting, onDelete, varia
           transition={{ duration: isDeleting ? 0.35 : 0.1, delay: isDeleting ? 0.2 : 0 }}
         >
           <ArtifactMeta artifact={artifact} />
-          {onDelete && !isDeleting && (
-            <button
-              className="mt-1 opacity-0 group-hover:opacity-100 transition-opacity duration-150 text-[10px] text-muted-foreground/40 hover:text-muted-foreground/80"
-              onClick={(e) => { e.stopPropagation(); onDelete() }}
-              onPointerDown={(e) => e.stopPropagation()}
-            >
-              delete
-            </button>
+          {!isDeleting && (onDelete || onPublish) && (
+            <div className="mt-1 flex gap-3 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
+              {onPublish && (
+                <button
+                  className="text-[10px] text-muted-foreground/40 hover:text-foreground/70"
+                  onClick={(e) => { e.stopPropagation(); onPublish() }}
+                  onPointerDown={(e) => e.stopPropagation()}
+                >
+                  publish
+                </button>
+              )}
+              {onDelete && (
+                <button
+                  className="text-[10px] text-muted-foreground/40 hover:text-muted-foreground/80"
+                  onClick={(e) => { e.stopPropagation(); onDelete() }}
+                  onPointerDown={(e) => e.stopPropagation()}
+                >
+                  delete
+                </button>
+              )}
+            </div>
+          )}
+          {artifact.status === "pending" && (
+            <div className="mt-1 text-[9px] text-muted-foreground/30 uppercase tracking-widest">pending</div>
           )}
         </motion.div>
       </div>

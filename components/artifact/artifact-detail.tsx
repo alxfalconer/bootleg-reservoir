@@ -9,9 +9,11 @@ import type { Artifact } from "@/lib/artifacts"
 interface ArtifactDetailProps {
   artifact: Artifact
   onClose: () => void
+  onPublish?: () => void
+  onDelete?: () => void
 }
 
-export function ArtifactDetail({ artifact, onClose }: ArtifactDetailProps) {
+export function ArtifactDetail({ artifact, onClose, onPublish, onDelete }: ArtifactDetailProps) {
   const isText = artifact.type === "text" || artifact.type === "found text"
 
   useEffect(() => {
@@ -60,13 +62,29 @@ export function ArtifactDetail({ artifact, onClose }: ArtifactDetailProps) {
         >
           <ArtifactMeta artifact={artifact} expanded />
 
-          <div className="pt-3">
+          <div className="pt-3 flex items-center gap-4">
             <button
               onClick={onClose}
               className="text-[10px] text-muted-foreground hover:text-foreground transition-colors"
             >
               close
             </button>
+            {onPublish && (
+              <button
+                onClick={() => { onPublish(); onClose() }}
+                className="text-[10px] text-muted-foreground/50 hover:text-foreground transition-colors"
+              >
+                publish
+              </button>
+            )}
+            {onDelete && (
+              <button
+                onClick={() => { onClose(); onDelete() }}
+                className="text-[10px] text-muted-foreground/50 hover:text-red-400 transition-colors"
+              >
+                delete
+              </button>
+            )}
           </div>
         </motion.div>
       </div>

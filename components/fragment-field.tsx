@@ -1,12 +1,14 @@
 "use client"
 
 import { useState, useRef, useEffect, useMemo } from "react"
+import { useRouter } from "next/navigation"
 import { AnimatePresence, motion } from "motion/react"
 import { ArtifactCard } from "./artifact/artifact-card"
 import { ArtifactDetail } from "./artifact/artifact-detail"
 import { DepositForm } from "./deposit/deposit-form"
 import { useArtifacts } from "@/lib/use-artifacts"
 import { useViewContext } from "@/lib/view-context"
+import { useAuth } from "@/lib/auth-context"
 import type { Artifact } from "@/lib/artifacts"
 
 interface FragmentFieldProps {
@@ -72,9 +74,12 @@ function loadDisplayOrder(): string[] {
 }
 
 export function FragmentField({ serverArtifacts }: FragmentFieldProps) {
+  const router = useRouter()
+  const { user } = useAuth()
+  const isAdmin = !!user
   const { viewMode, shuffleSignal, mediaFilter } = useViewContext()
   const effectiveView = mediaFilter !== "all" ? "grid" : viewMode
-  const { allArtifacts, removeArtifact } = useArtifacts(serverArtifacts)
+  const { allArtifacts } = useArtifacts(serverArtifacts)
 
   const containerRef   = useRef<HTMLDivElement>(null)
   const dragStateRef   = useRef<DragState | null>(null)
@@ -200,11 +205,17 @@ export function FragmentField({ serverArtifacts }: FragmentFieldProps) {
 
   // --- Artifact lifecycle ---
 
-  function handleDeleteComplete(id: string) {
-    removeArtifact(id)
+  async function handleDeleteComplete(id: string) {
+    await fetch(`/api/artifacts/${id}`, { method: "DELETE" })
     setDeletingId(null)
     setDisplayOrder(prev => prev.filter(oid => oid !== id))
     setPositions(prev => { const { [id]: _, ...rest } = prev; return rest })
+    router.refresh()
+  }
+
+  async function handlePublish(id: string) {
+    await fetch(`/api/artifacts/${id}`, { method: "PATCH" })
+    router.refresh()
   }
 
   // --- Shared render helpers ---
@@ -227,14 +238,15 @@ export function FragmentField({ serverArtifacts }: FragmentFieldProps) {
 
   function card(artifact: Artifact, variant?: "default" | "grid" | "single") {
     const isDeleting = deletingId === artifact.id
-    const isLocal    = artifact.id.startsWith("rsv-local-")
+    const isPending  = artifact.status === "pending"
     return wrapDelete(artifact, (
       <ArtifactCard
         artifact={artifact}
         isExpanded={expandedId === artifact.id}
         isDragging={draggedId === artifact.id}
         isDeleting={isDeleting}
-        onDelete={isLocal && !isDeleting ? () => setDeletingId(artifact.id) : undefined}
+        onDelete={isAdmin && !isDeleting ? () => setDeletingId(artifact.id) : undefined}
+        onPublish={isAdmin && isPending && !isDeleting ? () => handlePublish(artifact.id) : undefined}
         variant={variant}
       />
     ))
@@ -353,6 +365,8 @@ export function FragmentField({ serverArtifacts }: FragmentFieldProps) {
             key={expandedArtifact.id}
             artifact={expandedArtifact}
             onClose={() => setExpandedId(null)}
+            onPublish={isAdmin && expandedArtifact.status === "pending" ? () => handlePublish(expandedArtifact.id) : undefined}
+            onDelete={isAdmin ? () => { setExpandedId(null); setDeletingId(expandedArtifact.id) } : undefined}
           />
         )}
         {depositOpen && (
