@@ -1,5 +1,6 @@
 import { getSupabaseAnon } from "./supabase/server"
 import { artifacts as seedArtifacts, type Artifact } from "./artifacts"
+import type { SupabaseClient } from "@supabase/supabase-js"
 
 type ArtifactRow = {
   id: string
@@ -37,18 +38,16 @@ function rowToArtifact(row: ArtifactRow): Artifact {
   }
 }
 
-export async function getPublishedArtifacts(): Promise<Artifact[]> {
-  const supabase = getSupabaseAnon()
+// Pass a session-aware client to also include the caller's own pending artifacts.
+// RLS handles visibility: published for everyone, pending only for deposited_by.
+export async function getPublishedArtifacts(client?: SupabaseClient | null): Promise<Artifact[]> {
+  const supabase = client ?? getSupabaseAnon()
 
-  if (!supabase) {
-    // Supabase not configured — use static seed data
-    return seedArtifacts
-  }
+  if (!supabase) return seedArtifacts
 
   const { data, error } = await supabase
     .from("artifacts")
     .select("*")
-    .eq("status", "published")
     .order("created_at", { ascending: true })
 
   if (error) {

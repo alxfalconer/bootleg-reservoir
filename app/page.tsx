@@ -7,12 +7,9 @@ import { getPublishedArtifacts } from "@/lib/get-artifacts"
 import { getSupabaseAuth } from "@/lib/supabase/server"
 
 export default async function ReservoirPage() {
-  const [supabase, serverArtifacts] = await Promise.all([
-    getSupabaseAuth(),
-    getPublishedArtifacts(),
-  ])
-
+  const supabase = await getSupabaseAuth()
   const { data: { user } } = await supabase.auth.getUser()
+  const serverArtifacts = await getPublishedArtifacts(supabase)
 
   return (
     <ClientProviders user={user}>

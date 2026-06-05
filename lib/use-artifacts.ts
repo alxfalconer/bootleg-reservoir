@@ -25,14 +25,6 @@ export function useArtifacts(serverArtifacts: Artifact[]) {
     setLocalArtifacts(loadLocal())
   }, [])
 
-  const addArtifact = useCallback((artifact: Artifact) => {
-    setLocalArtifacts((prev) => {
-      const next = [...prev, artifact]
-      saveLocal(next)
-      return next
-    })
-  }, [])
-
   const removeArtifact = useCallback((id: string) => {
     setLocalArtifacts((prev) => {
       const next = prev.filter((a) => a.id !== id)
@@ -43,12 +35,6 @@ export function useArtifacts(serverArtifacts: Artifact[]) {
 
   return {
     allArtifacts: [...serverArtifacts, ...localArtifacts],
-    addArtifact,
     removeArtifact,
-    localCount: localArtifacts.length,
   }
-}
-
-export function generateLocalId(localCount: number): string {
-  return `rsv-local-${String(localCount + 1).padStart(4, "0")}`
 }

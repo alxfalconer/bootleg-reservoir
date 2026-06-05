@@ -1,14 +1,11 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
+import { useRouter } from "next/navigation"
 import { motion } from "motion/react"
-import { type Artifact } from "@/lib/artifacts"
-import { getMediaTypeForFile, isValidFile, ACCEPT_ATTR } from "@/lib/artifact-validation"
-import { generateLocalId } from "@/lib/use-artifacts"
+import { isValidFile, ACCEPT_ATTR } from "@/lib/artifact-validation"
 
 interface DepositFormProps {
-  localCount: number
-  onSubmit: (artifact: Artifact) => void
   onClose: () => void
 }
 
@@ -19,30 +16,11 @@ interface FormState {
   notes: string
 }
 
-const INITIAL: FormState = {
-  title: "",
-  notes: "",
-}
+const INITIAL: FormState = { title: "", notes: "" }
 
-function formatUploadDate(date: Date): string {
-  return date.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })
-}
+export function DepositForm({ onClose }: DepositFormProps) {
+  const router = useRouter()
 
-function fileToDataUrl(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = () => resolve(reader.result as string)
-    reader.onerror = reject
-    reader.readAsDataURL(file)
-  })
-}
-
-function deriveTitle(text: string): string {
-  const first = text.trim().split(/\n/)[0].trim()
-  return first.length > 80 ? first.slice(0, 77) + "…" : first || "untitled"
-}
-
-export function DepositForm({ localCount, onSubmit, onClose }: DepositFormProps) {
   const [tab,         setTab]         = useState<Tab>("media")
   const [form,        setForm]        = useState<FormState>(INITIAL)
   const [file,        setFile]        = useState<File | null>(null)
@@ -86,55 +64,30 @@ export function DepositForm({ localCount, onSubmit, onClose }: DepositFormProps)
     setSubmitError(null)
 
     try {
-      let artifact: Artifact
-
-      const uploadedAt = formatUploadDate(new Date())
+      const body = new FormData()
+      body.append("tab", tab)
 
       if (tab === "words") {
-        artifact = {
-          id: generateLocalId(localCount),
-          type: "found text",
-          title: wordTitle.trim() || deriveTitle(wordText),
-          dateRaw: "",
-          uploadedAt,
-          description: wordText.trim(),
-          media: { type: "none" },
-          status: "published",
-        }
+        body.append("wordText",  wordText.trim())
+        body.append("wordTitle", wordTitle.trim())
       } else {
-        let mediaType: Artifact["media"]["type"] = "none"
-        let mediaUrl: string | undefined
-
-        if (file) {
-          const detected = getMediaTypeForFile(file.name)
-          if (detected && detected !== "text") {
-            mediaType = detected
-            mediaUrl = await fileToDataUrl(file)
-          }
-        }
-
-        artifact = {
-          id: generateLocalId(localCount),
-          type: "unknown",
-          title: form.title.trim(),
-          dateRaw: "",
-          uploadedAt,
-          notes: form.notes.trim() || undefined,
-          description: form.title.trim(),
-          media: { type: mediaType, url: mediaUrl },
-          status: "published",
-        }
+        body.append("title", form.title.trim())
+        body.append("notes", form.notes.trim())
+        if (file) body.append("file", file)
       }
 
-      onSubmit(artifact)
+      const res = await fetch("/api/deposit", { method: "POST", body })
+      const json = await res.json()
+
+      if (!res.ok) {
+        setSubmitError(json.error ?? "something went wrong")
+        return
+      }
+
       onClose()
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err)
-      setSubmitError(
-        msg.toLowerCase().includes("quota")
-          ? "storage quota exceeded — try a smaller file"
-          : "something went wrong"
-      )
+      router.refresh()
+    } catch {
+      setSubmitError("something went wrong")
     } finally {
       setSubmitting(false)
     }
@@ -179,14 +132,12 @@ export function DepositForm({ localCount, onSubmit, onClose }: DepositFormProps)
               ))}
             </div>
 
-            {/* Tab content — fixed height so the modal doesn't resize between tabs */}
+            {/* Tab content */}
             <div className="h-[480px] overflow-y-auto">
 
             {/* ── MEDIA TAB ── */}
             {tab === "media" && (
               <div className="p-6 space-y-5">
-
-                {/* File zone — prominent */}
                 <div>
                   <input
                     ref={fileInputRef}
@@ -215,7 +166,6 @@ export function DepositForm({ localCount, onSubmit, onClose }: DepositFormProps)
                   {fileError && <div className="mt-1 text-[10px] text-red-500/70">{fileError}</div>}
                 </div>
 
-                {/* Title */}
                 <div className="space-y-1">
                   <label className="text-[10px] uppercase tracking-widest text-muted-foreground">
                     title <span className="normal-case tracking-normal">*</span>
@@ -230,7 +180,6 @@ export function DepositForm({ localCount, onSubmit, onClose }: DepositFormProps)
                   />
                 </div>
 
-                {/* Notes */}
                 <div className="space-y-1">
                   <label className="text-[10px] uppercase tracking-widest text-muted-foreground">notes</label>
                   <textarea
@@ -267,7 +216,7 @@ export function DepositForm({ localCount, onSubmit, onClose }: DepositFormProps)
               </div>
             )}
 
-            </div>{/* end fixed-height content wrapper */}
+            </div>
 
             {/* Footer */}
             <div className="px-6 pb-5 flex items-center justify-between border-t border-border pt-4">

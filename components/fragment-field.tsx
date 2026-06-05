@@ -74,7 +74,7 @@ function loadDisplayOrder(): string[] {
 export function FragmentField({ serverArtifacts }: FragmentFieldProps) {
   const { viewMode, shuffleSignal, mediaFilter } = useViewContext()
   const effectiveView = mediaFilter !== "all" ? "grid" : viewMode
-  const { allArtifacts, addArtifact, removeArtifact, localCount } = useArtifacts(serverArtifacts)
+  const { allArtifacts, removeArtifact } = useArtifacts(serverArtifacts)
 
   const containerRef   = useRef<HTMLDivElement>(null)
   const dragStateRef   = useRef<DragState | null>(null)
@@ -199,14 +199,6 @@ export function FragmentField({ serverArtifacts }: FragmentFieldProps) {
   }
 
   // --- Artifact lifecycle ---
-
-  function handleAddArtifact(artifact: Artifact) {
-    addArtifact(artifact)
-    setPositions(prev => ({
-      ...prev,
-      [artifact.id]: { x: 35 + Math.random() * 20, y: 35 + Math.random() * 20 },
-    }))
-  }
 
   function handleDeleteComplete(id: string) {
     removeArtifact(id)
@@ -366,8 +358,6 @@ export function FragmentField({ serverArtifacts }: FragmentFieldProps) {
         {depositOpen && (
           <DepositForm
             key="deposit"
-            localCount={localCount}
-            onSubmit={handleAddArtifact}
             onClose={() => setDepositOpen(false)}
           />
         )}
