@@ -85,34 +85,34 @@ export function ViewControls() {
           ))}
         </div>
 
-        {/* Play / Pause — Field mode only */}
-        {viewMode === "chaos" && (
+        {/* Play/Pause + Shuffle — shared row */}
+        <div className={`flex items-stretch border-b ${BORDER}`}>
+          {viewMode === "chaos" && (
+            <button
+              onPointerDown={e => e.stopPropagation()}
+              onClick={guard(() => setAutoplay(!autoplay))}
+              title={autoplay ? "Pause" : "Play"}
+              className={`flex-1 flex items-center justify-center py-2.5 border-r ${BORDER} transition-colors duration-100 cursor-pointer
+                ${autoplay
+                  ? "text-foreground hover:text-foreground/70 bg-foreground/[0.04]"
+                  : "text-foreground/35 hover:text-foreground/70 hover:bg-foreground/[0.03]"
+                }`}
+            >
+              {autoplay
+                ? <PauseIcon size={16} strokeWidth={1.6} />
+                : <PlayIcon  size={16} strokeWidth={1.6} />
+              }
+            </button>
+          )}
           <button
             onPointerDown={e => e.stopPropagation()}
-            onClick={guard(() => setAutoplay(!autoplay))}
-            title={autoplay ? "Pause" : "Play"}
-            className={`w-full flex items-center justify-center py-2.5 border-b ${BORDER} transition-colors duration-100 cursor-pointer
-              ${autoplay
-                ? "text-foreground hover:text-foreground/70 bg-foreground/[0.04]"
-                : "text-foreground/35 hover:text-foreground/70 hover:bg-foreground/[0.03]"
-              }`}
+            onClick={guard(triggerShuffle)}
+            title="Shuffle"
+            className={`flex-1 flex items-center justify-center py-2.5 text-foreground/35 hover:text-foreground/70 hover:bg-foreground/[0.03] transition-colors duration-100 cursor-pointer`}
           >
-            {autoplay
-              ? <PauseIcon size={16} strokeWidth={1.6} />
-              : <PlayIcon  size={16} strokeWidth={1.6} />
-            }
+            <ShuffleIcon size={20} strokeWidth={1.4} />
           </button>
-        )}
-
-        {/* Shuffle — primary action */}
-        <button
-          onPointerDown={e => e.stopPropagation()}
-          onClick={guard(triggerShuffle)}
-          title="Shuffle"
-          className={`w-full flex items-center justify-center py-2.5 border-b ${BORDER} text-foreground/35 hover:text-foreground/70 hover:bg-foreground/[0.03] transition-colors duration-100 cursor-pointer`}
-        >
-          <ShuffleIcon size={20} strokeWidth={1.4} />
-        </button>
+        </div>
 
         {/* Filter grid: 2 × 3, icon only */}
         <div className="grid grid-cols-2">
