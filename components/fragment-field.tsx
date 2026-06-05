@@ -431,36 +431,17 @@ export function FragmentField({ serverArtifacts }: FragmentFieldProps) {
     }
   }, [effectiveView])
 
-  // DEBUG: autoplay RAF
+  // Autoplay RAF — advances scrollTop on the <main> scroll container
   useEffect(() => {
     if (effectiveView !== "chaos") return
 
-    const SPEED_PX_PER_S  = 60   // DEBUG: still obvious but less frantic than 100
+    const SPEED_PX_PER_S  = 120
     const RESUME_AFTER_MS = 3000
 
     let lastTime: number | null = null
     let rafId: number
-    let tickCount = 0
 
     const tick = (now: number) => {
-      tickCount++
-
-      // Log every 60 ticks (~1s) so console isn't flooded
-      if (tickCount % 60 === 0) {
-        const el = scrollTrackRef.current?.parentElement
-        console.log("[autoplay] tick", tickCount, {
-          autoplayEnabled:  autoplayEnabledRef.current,
-          el:               el ? el.tagName + "." + el.className.slice(0, 40) : "NULL",
-          scrollTop:        el?.scrollTop ?? "N/A",
-          scrollHeight:     el?.scrollHeight ?? "N/A",
-          clientHeight:     el?.clientHeight ?? "N/A",
-          hoveredId:        hoveredIdRef.current,
-          expandedId:       expandedIdRef.current,
-          draggedId:        draggedIdRef.current,
-          msSinceManual:    Date.now() - lastManualScrollRef.current,
-        })
-      }
-
       if (lastTime !== null) {
         const dt = now - lastTime
         const el = scrollTrackRef.current?.parentElement
@@ -473,11 +454,7 @@ export function FragmentField({ serverArtifacts }: FragmentFieldProps) {
           !draggedIdRef.current &&
           Date.now() - lastManualScrollRef.current >= RESUME_AFTER_MS
         ) {
-          const before = el.scrollTop
           el.scrollTop += (SPEED_PX_PER_S / 1000) * dt
-          if (tickCount % 60 === 0) {
-            console.log("[autoplay] scrollTop", before, "→", el.scrollTop)
-          }
         }
       }
       lastTime = now
@@ -844,12 +821,6 @@ export function FragmentField({ serverArtifacts }: FragmentFieldProps) {
               )
             })}
 
-            {/* DEBUG: autoplay indicator */}
-            {autoplay && (
-              <div className="absolute top-3 left-1/2 -translate-x-1/2 z-[200] bg-red-500 text-white text-[10px] font-mono font-bold px-3 py-1 pointer-events-none">
-                AUTOSCROLLING — scrollY: {Math.round(scrollY)}
-              </div>
-            )}
 
 </div>
         </div>
