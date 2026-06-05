@@ -9,6 +9,10 @@ import { useArtifacts } from "@/lib/use-artifacts"
 import { useViewContext } from "@/lib/view-context"
 import type { Artifact } from "@/lib/artifacts"
 
+interface FragmentFieldProps {
+  serverArtifacts: Artifact[]
+}
+
 const BASE_POSITIONS = [
   { x: 5, y: 8 },
   { x: 55, y: 3 },
@@ -67,10 +71,10 @@ function loadDisplayOrder(): string[] {
   } catch { return [] }
 }
 
-export function FragmentField() {
+export function FragmentField({ serverArtifacts }: FragmentFieldProps) {
   const { viewMode, shuffleSignal, mediaFilter } = useViewContext()
   const effectiveView = mediaFilter !== "all" ? "grid" : viewMode
-  const { allArtifacts, addArtifact, removeArtifact, localCount } = useArtifacts()
+  const { allArtifacts, addArtifact, removeArtifact, localCount } = useArtifacts(serverArtifacts)
 
   const containerRef   = useRef<HTMLDivElement>(null)
   const dragStateRef   = useRef<DragState | null>(null)

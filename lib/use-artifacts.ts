@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useCallback, useEffect } from "react"
-import { artifacts as seedArtifacts, type Artifact } from "./artifacts"
+import type { Artifact } from "./artifacts"
 
 const STORAGE_KEY = "rsv-local-artifacts"
 
@@ -18,10 +18,9 @@ function saveLocal(items: Artifact[]): void {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(items))
 }
 
-export function useArtifacts() {
+export function useArtifacts(serverArtifacts: Artifact[]) {
   const [localArtifacts, setLocalArtifacts] = useState<Artifact[]>([])
 
-  // Defer localStorage read to after hydration to avoid server/client mismatch
   useEffect(() => {
     setLocalArtifacts(loadLocal())
   }, [])
@@ -43,7 +42,7 @@ export function useArtifacts() {
   }, [])
 
   return {
-    allArtifacts: [...seedArtifacts, ...localArtifacts],
+    allArtifacts: [...serverArtifacts, ...localArtifacts],
     addArtifact,
     removeArtifact,
     localCount: localArtifacts.length,

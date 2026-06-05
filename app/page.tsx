@@ -3,10 +3,19 @@ import { DepositTrigger } from "@/components/deposit-trigger"
 import { ViewControls } from "@/components/view-controls"
 import { ClientProviders } from "@/components/client-providers"
 import { ReservoirSidebar } from "@/components/reservoir-sidebar"
+import { getPublishedArtifacts } from "@/lib/get-artifacts"
+import { getSupabaseAuth } from "@/lib/supabase/server"
 
-export default function ReservoirPage() {
+export default async function ReservoirPage() {
+  const [supabase, serverArtifacts] = await Promise.all([
+    getSupabaseAuth(),
+    getPublishedArtifacts(),
+  ])
+
+  const { data: { user } } = await supabase.auth.getUser()
+
   return (
-    <ClientProviders>
+    <ClientProviders user={user}>
       <div className="flex h-screen overflow-hidden">
 
         {/* LEFT COLUMN — Archivist's notebook */}
@@ -27,7 +36,7 @@ export default function ReservoirPage() {
         <main className="flex-1 overflow-y-auto bg-foreground/5">
           {/* Spacer for mobile header */}
           <div className="md:hidden h-14" />
-          <FragmentField />
+          <FragmentField serverArtifacts={serverArtifacts} />
         </main>
 
       </div>

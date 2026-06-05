@@ -1,10 +1,21 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
 import { DepositTrigger } from "@/components/deposit-trigger"
+import { useAuth } from "@/lib/auth-context"
+import { getSupabaseBrowser } from "@/lib/supabase/client"
 export function ReservoirSidebar() {
   const [isCollapsed, setIsCollapsed] = useState(false)
   const toggleSidebar = () => setIsCollapsed(c => !c)
+  const { user } = useAuth()
+  const router = useRouter()
+
+  async function handleSignOut() {
+    const supabase = getSupabaseBrowser()
+    await supabase.auth.signOut()
+    router.refresh()
+  }
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -97,12 +108,26 @@ export function ReservoirSidebar() {
 
         </div>
 
-        {/* Invite only — pushed to bottom */}
-        <div className="mt-auto pt-10">
-          <div className="text-[10px] text-muted-foreground/60">
-            <span className="inline-block w-2 h-2 bg-muted-foreground/30 mr-1" />
-            invite only
-          </div>
+        {/* Bottom — invite only / signed in state */}
+        <div className="mt-auto pt-10 space-y-2">
+          {user ? (
+            <div className="flex items-center justify-between">
+              <div className="text-[10px] text-muted-foreground/60 truncate max-w-[160px]">
+                {user.email}
+              </div>
+              <button
+                onClick={handleSignOut}
+                className="text-[10px] text-muted-foreground/40 hover:text-foreground transition-colors ml-2"
+              >
+                sign out
+              </button>
+            </div>
+          ) : (
+            <div className="text-[10px] text-muted-foreground/60">
+              <span className="inline-block w-2 h-2 bg-muted-foreground/30 mr-1" />
+              invite only
+            </div>
+          )}
         </div>
       </div>
     </aside>
