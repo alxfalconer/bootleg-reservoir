@@ -46,7 +46,7 @@ export function ViewControls() {
 
         <button
           onClick={toggleTheme}
-          className="text-[10px] text-foreground/40 hover:text-foreground/70 transition-colors duration-150 leading-none"
+          className="text-base text-foreground/40 hover:text-foreground/70 transition-colors duration-150 leading-none"
           title={dark ? "Switch to light mode" : "Switch to dark mode"}
         >
           {dark ? "○" : "●"}
