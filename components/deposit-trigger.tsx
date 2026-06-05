@@ -1,15 +1,13 @@
 "use client"
 
-import { useRouter } from "next/navigation"
 import { useAuth } from "@/lib/auth-context"
 
 export function DepositTrigger({ collapsed }: { collapsed?: boolean } = {}) {
   const { user } = useAuth()
-  const router = useRouter()
 
   const handleClick = () => {
     if (!user) {
-      router.push("/login")
+      window.dispatchEvent(new CustomEvent("login:open"))
       return
     }
     window.dispatchEvent(new CustomEvent("deposit:open"))
