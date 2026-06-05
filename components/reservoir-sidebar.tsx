@@ -93,10 +93,7 @@ export function ReservoirSidebar() {
               Deposit artifacts— stray images, sounds, words, slop, footage, original, pirated, whatever.
             </p>
             <p>
-              Aimless collection breeds strange patterns, blessing me with stranger ideas.
-            </p>
-            <p>
-              Thank you.
+              Aimless collection breeds odd connections, inspiration. Blessings.
             </p>
           </div>
           <div className="mt-10">
