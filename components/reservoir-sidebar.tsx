@@ -90,13 +90,13 @@ export function ReservoirSidebar() {
               If you&apos;re here I either admire your taste or consider it so atrocious that it enters visionary territory.
             </p>
             <p>
-              This place is for pooling artifacts. Deposit field recordings, video, images, words, slop, copyrighted material, nudes, ads, etc.
+              Deposit artifacts— stray images, sounds, words, slop, footage, original, pirated, whatever.
             </p>
             <p>
-              Slicing, stitching and smashing pieces together till strange patterns emerge is a religious experience.
+              Aimless collection breeds strange patterns, blessing me with stranger ideas.
             </p>
             <p>
-              Credits aren&apos;t publicized on the site but can be posted on release of completed material, per request.
+              Thank you.
             </p>
           </div>
           <div className="mt-10">

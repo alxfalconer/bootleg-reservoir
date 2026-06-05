@@ -3,7 +3,7 @@
 import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from "react"
 
 export type ViewMode = "chaos" | "grid" | "single"
-export type MediaFilter = "all" | "image" | "video" | "audio" | "words"
+export type MediaFilter = "all" | "image" | "video" | "audio" | "text" | "link"
 
 interface ViewContextValue {
   viewMode: ViewMode

@@ -311,7 +311,8 @@ export function FragmentField({ serverArtifacts }: FragmentFieldProps) {
 
   const visibleArtifacts = useMemo(() => {
     if (mediaFilter === "all") return orderedArtifacts
-    if (mediaFilter === "words") return orderedArtifacts.filter(a => a.type === "text" || a.type === "found text")
+    if (mediaFilter === "text") return orderedArtifacts.filter(a => a.type === "text" || a.type === "found text")
+    if (mediaFilter === "link") return orderedArtifacts.filter(a => (a.type as string) === "link")
     return orderedArtifacts.filter(a => a.media.type === mediaFilter)
   }, [orderedArtifacts, mediaFilter])
 
@@ -755,12 +756,7 @@ export function FragmentField({ serverArtifacts }: FragmentFieldProps) {
               )
             })}
 
-            {/* Fragment count */}
-            <div className="absolute bottom-4 right-4 z-[45] text-[10px] text-muted-foreground/30 pointer-events-none select-none">
-              {visibleArtifacts.length} fragments
-            </div>
-
-          </div>
+</div>
         </div>
       )}
 

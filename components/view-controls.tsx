@@ -1,75 +1,143 @@
 "use client"
 
+import { useEffect, useRef } from "react"
+import { motion, useMotionValue } from "motion/react"
+import { Image as ImageIcon, Link as LinkIcon, Shuffle as ShuffleIcon } from "lucide-react"
 import { useViewContext, type ViewMode, type MediaFilter } from "@/lib/view-context"
 import { useTheme } from "@/lib/theme"
 
-const MODES: { value: ViewMode; label: string }[] = [
-  { value: "chaos", label: "chaos" },
-  { value: "grid",  label: "order" },
+const VIEW_MODES: { value: ViewMode; label: string }[] = [
+  { value: "chaos", label: "Field" },
+  { value: "grid",  label: "Index" },
 ]
 
-const FILTERS: { value: MediaFilter; label: string }[] = [
-  { value: "all",   label: "all"   },
-  { value: "image", label: "image" },
-  { value: "video", label: "video" },
-  { value: "audio", label: "audio" },
-  { value: "words", label: "words" },
-]
+const BORDER = "border-foreground/[0.13]"
+const POS_KEY = "rsv-panel-pos"
 
 export function ViewControls() {
   const { viewMode, setViewMode, triggerShuffle, mediaFilter, setMediaFilter } = useViewContext()
   const { dark, toggle: toggleTheme } = useTheme()
+  const constraintsRef = useRef<HTMLDivElement>(null)
+  const isDraggingRef  = useRef(false)
+  const x = useMotionValue(0)
+  const y = useMotionValue(0)
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(POS_KEY)
+      if (saved) {
+        const pos = JSON.parse(saved)
+        x.set(pos.x)
+        y.set(pos.y)
+      }
+    } catch {}
+  }, [])
+
+  function handleDragEnd() {
+    setTimeout(() => { isDraggingRef.current = false }, 0)
+    try {
+      localStorage.setItem(POS_KEY, JSON.stringify({ x: x.get(), y: y.get() }))
+    } catch {}
+  }
+
+  function guard(fn: () => void) {
+    return () => { if (!isDraggingRef.current) fn() }
+  }
+
+  const filters: { value: MediaFilter; icon: React.ReactNode; title: string }[] = [
+    { value: "all",   title: "All",   icon: <span className="text-[15px] leading-none">◇</span> },
+    { value: "image", title: "Image", icon: <ImageIcon size={15} strokeWidth={1.6} /> },
+    { value: "video", title: "Video", icon: <span className="text-[12px] leading-none">▶</span> },
+    { value: "audio", title: "Audio", icon: <span className="text-[15px] leading-none">♫</span> },
+    { value: "text",  title: "Text",  icon: <span className="text-[15px] leading-none font-serif">¶</span> },
+    { value: "link",  title: "Link",  icon: <LinkIcon size={15} strokeWidth={1.6} /> },
+  ]
 
   return (
-    <div className="fixed bottom-5 right-5 md:bottom-7 md:right-7 z-[55] border border-foreground/[0.08] bg-background shadow-md dark:shadow-none rounded-[5px] overflow-hidden">
+    <div ref={constraintsRef} className="fixed inset-0 pointer-events-none z-[55]">
+      <motion.div
+        drag
+        dragConstraints={constraintsRef}
+        dragMomentum={false}
+        dragElastic={0}
+        onDragStart={() => { isDraggingRef.current = true }}
+        onDragEnd={handleDragEnd}
+        style={{ x, y, bottom: 20, right: 20 }}
+        className={`absolute pointer-events-auto border ${BORDER} bg-background/[0.97] backdrop-blur-md overflow-hidden select-none shadow-[0_2px_12px_rgba(0,0,0,0.08)] dark:shadow-[0_2px_12px_rgba(0,0,0,0.3)] rounded-[5px] cursor-grab active:cursor-grabbing`}
+      >
 
-      {/* View mode */}
-      <div className="flex items-center gap-6 px-6 py-2">
-        {MODES.map(({ value, label }) => (
-          <button
-            key={value}
-            onClick={() => setViewMode(value)}
-            className={`text-[10px] font-bold tracking-wide transition-colors duration-150 ${
-              viewMode === value ? "bg-foreground/5 text-foreground px-2 py-0.5 rounded-[5px]" : "text-foreground/40 hover:text-foreground/60"
-            }`}
-          >
-            {label}
-          </button>
-        ))}
+        {/* View mode: Field / Index */}
+        <div className={`flex items-stretch border-b ${BORDER}`}>
+          {VIEW_MODES.map(({ value, label }, i) => (
+            <button
+              key={value}
+              onPointerDown={e => e.stopPropagation()}
+              onClick={guard(() => { setViewMode(value); if (value === "chaos") setMediaFilter("all") })}
+              className={`flex-1 text-[9px] font-bold tracking-widest uppercase px-3 py-2 transition-colors duration-100 text-center cursor-pointer
+                ${i > 0 ? `border-l ${BORDER}` : ""}
+                ${viewMode === value
+                  ? "text-foreground bg-foreground/[0.07]"
+                  : "text-foreground/30 hover:text-foreground/55"
+                }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
 
+        {/* Shuffle — primary action */}
         <button
-          onClick={triggerShuffle}
-          className="group/shuffle transition-colors duration-150"
+          onPointerDown={e => e.stopPropagation()}
+          onClick={guard(triggerShuffle)}
+          title="Shuffle"
+          className={`w-full flex items-center justify-center py-2.5 border-b ${BORDER} text-foreground/35 hover:text-foreground/70 hover:bg-foreground/[0.03] transition-colors duration-100 cursor-pointer`}
         >
-          <img src="/shuffle.svg" alt="shuffle" className="w-4 h-4 opacity-40 group-hover/shuffle:opacity-60 dark:invert" />
+          <ShuffleIcon size={20} strokeWidth={1.4} />
         </button>
 
-        <button
-          onClick={toggleTheme}
-          className="text-base text-foreground/40 hover:text-foreground/70 transition-colors duration-150 leading-none"
-          title={dark ? "Switch to light mode" : "Switch to dark mode"}
-        >
-          {dark ? "○" : "●"}
-        </button>
-      </div>
+        {/* Filter grid: 2 × 3, icon only */}
+        <div className="grid grid-cols-2">
+          {filters.map(({ value, icon, title }, i) => {
+            const active   = mediaFilter === value
+            const rightCol = i % 2 !== 0
+            const lastRow  = i >= filters.length - 2
+            return (
+              <button
+                key={value}
+                onPointerDown={e => e.stopPropagation()}
+                onClick={guard(() => { setMediaFilter(value); if (value !== "all") setViewMode("grid") })}
+                title={title}
+                className={`flex items-center justify-center py-3 transition-colors duration-100 cursor-pointer
+                  ${rightCol ? `border-l ${BORDER}` : ""}
+                  ${!lastRow ? `border-b ${BORDER}` : ""}
+                  ${active
+                    ? "text-foreground bg-foreground/[0.08]"
+                    : "text-foreground/30 hover:text-foreground/60 hover:bg-foreground/[0.03]"
+                  }`}
+              >
+                {icon}
+              </button>
+            )
+          })}
+        </div>
 
-      <div className="border-t border-foreground/[0.08]" />
-
-      {/* Media type filter */}
-      <div className="flex items-center gap-6 px-6 py-2">
-        {FILTERS.map(({ value, label }) => (
+        {/* Theme toggle */}
+        <div className={`border-t ${BORDER} flex items-center justify-center px-3 py-2.5`}>
           <button
-            key={value}
-            onClick={() => setMediaFilter(value)}
-            className={`text-[10px] font-bold tracking-wide transition-colors duration-150 ${
-              mediaFilter === value ? "bg-foreground/5 text-foreground px-2 py-0.5 rounded-[5px]" : "text-foreground/40 hover:text-foreground/60"
-            }`}
+            onPointerDown={e => e.stopPropagation()}
+            onClick={guard(toggleTheme)}
+            title={dark ? "Switch to light" : "Switch to dark"}
+            className={`relative w-full h-[18px] rounded-full border ${BORDER} bg-foreground/[0.05] transition-colors duration-200 cursor-pointer`}
           >
-            {label}
+            <span
+              className={`absolute top-[2px] w-[12px] h-[12px] rounded-full transition-all duration-200 bg-foreground/60 ${
+                dark ? "left-[calc(100%-14px)]" : "left-[2px]"
+              }`}
+            />
           </button>
-        ))}
-      </div>
+        </div>
 
+      </motion.div>
     </div>
   )
 }
