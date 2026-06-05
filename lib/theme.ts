@@ -8,9 +8,7 @@ export function useTheme() {
   const [dark, setDark] = useState(false)
 
   useEffect(() => {
-    const stored = localStorage.getItem(STORAGE_KEY)
-    const isDark  = stored === "dark" ||
-      (!stored && window.matchMedia("(prefers-color-scheme: dark)").matches)
+    const isDark = localStorage.getItem(STORAGE_KEY) === "dark"
     setDark(isDark)
     document.documentElement.classList.toggle("dark", isDark)
   }, [])

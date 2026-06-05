@@ -47,7 +47,7 @@ export default function RootLayout({
         {/* Apply saved theme before first paint to prevent flash */}
         <script
           dangerouslySetInnerHTML={{
-            __html: `try{var t=localStorage.getItem('rsv-theme');if(t==='dark'||(!t&&window.matchMedia('(prefers-color-scheme: dark)').matches)){document.documentElement.classList.add('dark')}}catch(e){}`,
+            __html: `try{if(localStorage.getItem('rsv-theme')==='dark'){document.documentElement.classList.add('dark')}}catch(e){}`,
           }}
         />
       </head>
