@@ -8,6 +8,18 @@ interface ArtifactMediaProps {
   expanded?: boolean
 }
 
+export function isEmbedVideo(url: string): boolean {
+  return /youtube\.com|youtu\.be|vimeo\.com/i.test(url)
+}
+
+function getEmbedUrl(url: string): string {
+  const yt = url.match(/(?:youtube\.com\/(?:watch\?v=|shorts\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/)
+  if (yt) return `https://www.youtube.com/embed/${yt[1]}?autoplay=1`
+  const vimeo = url.match(/vimeo\.com\/(\d+)/)
+  if (vimeo) return `https://player.vimeo.com/video/${vimeo[1]}?autoplay=1`
+  return url
+}
+
 export function ArtifactMedia({ artifact, className, expanded }: ArtifactMediaProps) {
   const isText = artifact.type === "text" || artifact.type === "found text"
   if (isText && artifact.description) {
@@ -46,14 +58,55 @@ export function ArtifactMedia({ artifact, className, expanded }: ArtifactMediaPr
   }
 
   if (artifact.media.type === "video" && artifact.media.url) {
+    const url = artifact.media.url
+
+    if (isEmbedVideo(url)) {
+      if (!expanded) {
+        return (
+          <div className="w-full aspect-video bg-black flex items-center justify-center">
+            <span className="text-white/20 text-[10px] uppercase tracking-[0.25em]">video</span>
+          </div>
+        )
+      }
+      return (
+        <div className="w-full aspect-video">
+          <iframe
+            src={getEmbedUrl(url)}
+            className="w-full h-full"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+            allowFullScreen
+            title={artifact.title}
+          />
+        </div>
+      )
+    }
+
     return (
       <video
-        src={artifact.media.url}
+        src={url}
         className={cn("w-full h-auto block", className)}
         muted
         loop
         playsInline
         autoPlay
+      />
+    )
+  }
+
+  if (artifact.media.type === "pdf" && artifact.media.url) {
+    if (!expanded) {
+      return (
+        <div className="w-full h-40 bg-foreground/[0.03] flex items-center justify-center">
+          <span className="text-[10px] text-muted-foreground/30 uppercase tracking-[0.25em]">pdf</span>
+        </div>
+      )
+    }
+    return (
+      <iframe
+        src={artifact.media.url}
+        className="w-full border-0"
+        style={{ height: "72vh" }}
+        title={artifact.title}
       />
     )
   }

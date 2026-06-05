@@ -24,13 +24,34 @@ export async function POST(request: Request) {
   }
 
   const formData = await request.formData()
-  const tab       = formData.get("tab") as "media" | "words"
+  const tab       = formData.get("tab") as "media" | "words" | "link"
   const uploadedAt = formatUploadDate(new Date())
   const artifactId = generateId()
 
   let row: Record<string, unknown>
 
-  if (tab === "words") {
+  if (tab === "link") {
+    const linkUrl   = (formData.get("linkUrl")   as string ?? "").trim()
+    const linkTitle = (formData.get("linkTitle") as string ?? "").trim()
+    const notes     = (formData.get("linkNotes") as string ?? "").trim() || null
+
+    const isVideo = /youtube\.com|youtu\.be|vimeo\.com/i.test(linkUrl)
+    const isPdf   = /\.pdf(\?|$)/i.test(linkUrl)
+
+    row = {
+      id:           artifactId,
+      type:         isPdf ? "document" : "video",
+      title:        linkTitle || "untitled",
+      date_raw:     "",
+      uploaded_at:  uploadedAt,
+      notes,
+      description:  linkTitle || linkUrl,
+      media_type:   isPdf ? "pdf" : isVideo ? "video" : "video",
+      media_url:    linkUrl,
+      status:       "pending",
+      deposited_by: user.id,
+    }
+  } else if (tab === "words") {
     const wordText  = (formData.get("wordText")  as string ?? "").trim()
     const wordTitle = (formData.get("wordTitle") as string ?? "").trim()
 
@@ -47,6 +68,7 @@ export async function POST(request: Request) {
       deposited_by: user.id,
     }
   } else {
+    // media tab
     const title = (formData.get("title") as string ?? "").trim()
     const notes = (formData.get("notes") as string ?? "").trim() || null
     const file  = formData.get("file") as File | null

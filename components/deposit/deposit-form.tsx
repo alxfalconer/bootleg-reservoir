@@ -9,7 +9,7 @@ interface DepositFormProps {
   onClose: () => void
 }
 
-type Tab = "media" | "words"
+type Tab = "media" | "words" | "link"
 
 interface FormState {
   title: string
@@ -27,9 +27,20 @@ export function DepositForm({ onClose }: DepositFormProps) {
   const [fileError,   setFileError]   = useState<string | null>(null)
   const [wordText,    setWordText]    = useState("")
   const [wordTitle,   setWordTitle]   = useState("")
+  const [linkUrl,     setLinkUrl]     = useState("")
+  const [linkTitle,   setLinkTitle]   = useState("")
+  const [linkNotes,   setLinkNotes]   = useState("")
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [submitting,  setSubmitting]  = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  function detectLinkType(url: string): "video" | "pdf" | null {
+    if (!url) return null
+    if (/youtube\.com|youtu\.be|vimeo\.com/i.test(url)) return "video"
+    if (/\.pdf(\?|$)/i.test(url)) return "pdf"
+    return null
+  }
+  const linkType = detectLinkType(linkUrl)
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose() }
@@ -53,9 +64,10 @@ export function DepositForm({ onClose }: DepositFormProps) {
     setFile(f)
   }
 
-  const canSubmit = tab === "media"
-    ? form.title.trim().length > 0
-    : wordText.trim().length > 0
+  const canSubmit =
+    tab === "media" ? form.title.trim().length > 0 :
+    tab === "words" ? wordText.trim().length > 0 :
+    linkUrl.trim().length > 0
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -70,6 +82,10 @@ export function DepositForm({ onClose }: DepositFormProps) {
       if (tab === "words") {
         body.append("wordText",  wordText.trim())
         body.append("wordTitle", wordTitle.trim())
+      } else if (tab === "link") {
+        body.append("linkUrl",   linkUrl.trim())
+        body.append("linkTitle", linkTitle.trim())
+        body.append("linkNotes", linkNotes.trim())
       } else {
         body.append("title", form.title.trim())
         body.append("notes", form.notes.trim())
@@ -116,7 +132,7 @@ export function DepositForm({ onClose }: DepositFormProps) {
 
             {/* Tabs */}
             <div className="flex border-b border-border">
-              {(["media", "words"] as Tab[]).map(t => (
+              {(["media", "words", "link"] as Tab[]).map(t => (
                 <button
                   key={t}
                   type="button"
@@ -185,6 +201,54 @@ export function DepositForm({ onClose }: DepositFormProps) {
                   <textarea
                     value={form.notes}
                     onChange={e => set("notes", e.target.value)}
+                    rows={3}
+                    className="w-full bg-transparent border border-border text-[11px] text-foreground px-2 py-1.5 focus:outline-none focus:border-foreground/50 placeholder:text-muted-foreground/40 resize-none"
+                    placeholder="any contextual observations"
+                  />
+                </div>
+
+                {submitError && <div className="text-[10px] text-red-500/70">{submitError}</div>}
+              </div>
+            )}
+
+            {/* ── LINK TAB ── */}
+            {tab === "link" && (
+              <div className="p-6 space-y-5">
+                <div className="space-y-1">
+                  <label className="text-[10px] uppercase tracking-widest text-muted-foreground">
+                    url <span className="normal-case tracking-normal">*</span>
+                  </label>
+                  <input
+                    type="url"
+                    value={linkUrl}
+                    onChange={e => setLinkUrl(e.target.value)}
+                    autoFocus
+                    className="w-full bg-transparent border border-border text-[11px] text-foreground px-2 py-1.5 focus:outline-none focus:border-foreground/50 placeholder:text-muted-foreground/40"
+                    placeholder="youtube.com, vimeo.com, or .pdf url"
+                  />
+                  {linkType && (
+                    <div className="text-[9px] text-muted-foreground/40 uppercase tracking-widest mt-0.5">
+                      {linkType} detected
+                    </div>
+                  )}
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] uppercase tracking-widest text-muted-foreground">title</label>
+                  <input
+                    type="text"
+                    value={linkTitle}
+                    onChange={e => setLinkTitle(e.target.value)}
+                    className="w-full bg-transparent border border-border text-[11px] text-foreground px-2 py-1.5 focus:outline-none focus:border-foreground/50 placeholder:text-muted-foreground/40"
+                    placeholder="optional"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] uppercase tracking-widest text-muted-foreground">notes</label>
+                  <textarea
+                    value={linkNotes}
+                    onChange={e => setLinkNotes(e.target.value)}
                     rows={3}
                     className="w-full bg-transparent border border-border text-[11px] text-foreground px-2 py-1.5 focus:outline-none focus:border-foreground/50 placeholder:text-muted-foreground/40 resize-none"
                     placeholder="any contextual observations"

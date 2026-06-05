@@ -72,7 +72,7 @@ export function ReservoirSidebar() {
         <div className="flex items-start justify-between">
           <div className="space-y-1">
             <h1 className="text-sm font-bold tracking-tight">Reservoir</h1>
-            <p className="text-[10px] text-muted-foreground">est. 2024</p>
+            <p className="text-[10px] text-muted-foreground italic">When you cut into the present the future leaks out.</p>
           </div>
           <button
             onClick={toggleSidebar}
@@ -85,9 +85,6 @@ export function ReservoirSidebar() {
 
         {/* Manifesto */}
         <div className="mt-10 space-y-6">
-          <h2 className="text-xs italic leading-relaxed">
-            When you cut into the present the future leaks out.
-          </h2>
           <div className="space-y-4 text-xs leading-relaxed text-foreground/90">
             <p>
               If you&apos;re here I either admire your taste or consider it so atrocious that it enters visionary territory.

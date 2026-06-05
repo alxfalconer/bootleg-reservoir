@@ -2,7 +2,7 @@
 
 import { useEffect } from "react"
 import { motion } from "motion/react"
-import { ArtifactMedia } from "./artifact-media"
+import { ArtifactMedia, isEmbedVideo } from "./artifact-media"
 import { ArtifactMeta } from "./artifact-meta"
 import type { Artifact } from "@/lib/artifacts"
 
@@ -14,7 +14,9 @@ interface ArtifactDetailProps {
 }
 
 export function ArtifactDetail({ artifact, onClose, onPublish, onDelete }: ArtifactDetailProps) {
-  const isText = artifact.type === "text" || artifact.type === "found text"
+  const isText  = artifact.type === "text" || artifact.type === "found text"
+  const isEmbed = artifact.media.type === "pdf" ||
+    (artifact.media.type === "video" && isEmbedVideo(artifact.media.url ?? ""))
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -39,7 +41,7 @@ export function ArtifactDetail({ artifact, onClose, onPublish, onDelete }: Artif
       {/* Centering shell — min-h-full + items-center centers short content; scrolls tall content from top */}
       <div className="flex min-h-full items-center justify-center p-8 md:p-16">
       {/* Content panel */}
-      <div className={`relative z-10 ${isText ? "max-w-2xl w-full" : "max-w-2xl w-fit"}`}>
+      <div className={`relative z-10 ${isText || isEmbed ? "max-w-3xl w-full" : "max-w-2xl w-fit"}`}>
         {/* Media — shared element, flies from card position */}
         <motion.div
           layoutId={`media-${artifact.id}`}
@@ -47,7 +49,7 @@ export function ArtifactDetail({ artifact, onClose, onPublish, onDelete }: Artif
         >
           <ArtifactMedia
             artifact={artifact}
-            className={isText ? undefined : "max-h-[60vh] w-auto block mx-auto"}
+            className={isText || isEmbed ? undefined : "max-h-[60vh] w-auto block mx-auto"}
             expanded
           />
         </motion.div>

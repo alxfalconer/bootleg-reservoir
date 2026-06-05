@@ -15,59 +15,205 @@ interface FragmentFieldProps {
   serverArtifacts: Artifact[]
 }
 
-// ── Temporal depth constants ──────────────────────────────────────────────────
+// ── Chaos field constants ─────────────────────────────────────────────────────
 
-const STRATUM_HEIGHT  = 600  // px of scroll per year layer
-const STRATA_YEARS    = [2026, 2025, 2024, 2023, 2022, 2021] as const
-const NEWEST_YEAR     = 2026
-const OLDEST_YEAR     = 2021
+const SCROLL_PER_LAYER  = 1050
+const NUM_LAYERS        = 5
+const MAX_SCROLL_LAYERS = 999
 
 // ── Pure helpers ──────────────────────────────────────────────────────────────
 
 function clamp(v: number, min: number, max: number) { return Math.max(min, Math.min(max, v)) }
+function lerp(a: number, b: number, t: number) { return a + (b - a) * t }
 function randRange(min: number, max: number) { return min + Math.random() * (max - min) }
 
-function getArtifactDepth(artifact: Artifact): number {
-  const year = artifact.depositYear ?? NEWEST_YEAR
-  return clamp(NEWEST_YEAR - year, 0, 5)
+// Phase-based scroll mapping for each layer cycle.
+// Raw frac (0→1) is remapped so the active layer holds at full visibility
+// for the first 65% of its scroll budget, then transitions out over the
+// final 35%.  Smoothstep easing softens the start of the exit so the
+// layer doesn't abruptly begin receding.
+//
+//   enter + hold (0–65%):  mappedFrac = 0  → relPos stays at 0, full visibility
+//   exit       (65–100%):  mappedFrac 0→1  → layer recedes using normal depth curve
+//
+function applyHoldPhase(rawFrac: number): number {
+  const HOLD_END = 0.65
+  if (rawFrac <= HOLD_END) return 0
+  const t = (rawFrac - HOLD_END) / (1 - HOLD_END)
+  return t * t * (3 - 2 * t)  // smoothstep: gentle start, clean finish
 }
 
-// Visual properties scaled by how far the artifact is from the depth camera.
-// relDepth > 0 = behind camera (older, receding); relDepth < 0 = in front (emerging)
-function getDepthProps(artDepth: number, depthCamera: number) {
-  const rel = artDepth - depthCamera
+// relPos 0 = active surface, 1 = next behind, 2 = deeper, <0 = exiting
+function getLayerTransform(relPos: number) {
+  if (relPos < 0) {
+    const t = clamp(-relPos, 0, 1)
+    return {
+      scale:         1 + t * 0.18,
+      opacity:       Math.max(0, 1 - t * 2.5),
+      blur:          0,
+      contrast:      1,
+      saturate:      1,
+      pointerEvents: (t > 0.05 ? "none" : "auto") as "none" | "auto",
+    }
+  }
+  if (relPos <= 1) {
+    const t = relPos
+    return {
+      scale:         lerp(1,    0.65,  t),
+      opacity:       lerp(1,    0.20,  t),
+      blur:          lerp(0,    4,     t),
+      contrast:      lerp(1,    0.72,  t),
+      saturate:      lerp(1,    0.50,  t),
+      pointerEvents: (t < 0.6 ? "auto" : "none") as "none" | "auto",
+    }
+  }
+  if (relPos <= 2) {
+    const t = relPos - 1
+    return {
+      scale:         lerp(0.65, 0.35, t),
+      opacity:       lerp(0.20, 0.08, t),
+      blur:          lerp(4,    8,    t),
+      contrast:      lerp(0.72, 0.45, t),
+      saturate:      lerp(0.50, 0.20, t),
+      pointerEvents: "none" as const,
+    }
+  }
+  if (relPos <= 3) {
+    const t = relPos - 2
+    return {
+      scale:         lerp(0.35, 0.20, t),
+      opacity:       lerp(0.08, 0.03, t),
+      blur:          lerp(8,    12,   t),
+      contrast:      lerp(0.45, 0.35, t),
+      saturate:      lerp(0.20, 0.10, t),
+      pointerEvents: "none" as const,
+    }
+  }
   return {
-    scale:         1 - clamp(rel * 0.055, -0.05, 0.30),
-    opacity:       clamp(1 - rel * 0.08, 0.55, 1),
-    blur:          clamp(rel * 0.5, 0, 3.5),
-    driftDuration: 9 + artDepth * 1.5,  // older → slower drift
+    scale: 0.20, opacity: 0.02, blur: 14, contrast: 0.30, saturate: 0.08,
+    pointerEvents: "none" as const,
   }
 }
 
-// Deterministic, year-biased initial positions.
-// Newer artifacts cluster near the top; older ones settle deeper in the canvas.
-function buildInitialPositions(artifacts: Artifact[]): Record<string, { x: number; y: number }> {
-  const pos: Record<string, { x: number; y: number }> = {}
-  artifacts.forEach(a => {
-    const depth = getArtifactDepth(a)
-    let h = 0
-    for (let i = 0; i < a.id.length; i++) h = (Math.imul(31, h) + a.id.charCodeAt(i)) | 0
-    const seed = Math.abs(h)
-    const yBase   = (depth / 5) * 68 + 4           // depth 0 → ~4%, depth 5 → ~72%
-    const yJitter = ((seed % 300) / 300 - 0.5) * 16 // ±8% jitter
-    pos[a.id] = {
-      x: (seed % 78) + 3,
-      y: clamp(yBase + yJitter, 3, 85),
-    }
-  })
-  return pos
-}
-
+// Wang hash — sequential IDs avalanche into independent positions
 function fallbackPosition(id: string): { x: number; y: number } {
   let h = 0
   for (let i = 0; i < id.length; i++) h = (Math.imul(31, h) + id.charCodeAt(i)) | 0
-  const abs = Math.abs(h)
-  return { x: (abs % 75) + 5, y: ((abs >> 8) % 80) + 5 }
+  h = Math.imul(h ^ (h >>> 16), 0x45d9f3b)
+  h = Math.imul(h ^ (h >>> 16), 0x45d9f3b)
+  h = h ^ (h >>> 16)
+  const u = h >>> 0
+  return { x: (u % 72) + 5, y: ((u >>> 11) % 42) + 4 }
+}
+
+// Deterministic position seeded by (id + slot index) — safe for SSR
+function buildSlotPositions(
+  ids: string[],
+  seed: number,
+): Record<string, { x: number; y: number }> {
+  const pos: Record<string, { x: number; y: number }> = {}
+  ids.forEach(id => { pos[id] = fallbackPosition(`${id}:${seed}`) })
+  return pos
+}
+
+// Random positions used only at runtime (never during SSR)
+function generateLayerPositions(
+  ids: string[],
+): Record<string, { x: number; y: number }> {
+  const pos: Record<string, { x: number; y: number }> = {}
+  ids.forEach(id => { pos[id] = { x: 5 + Math.random() * 72, y: 4 + Math.random() * 42 } })
+  return pos
+}
+
+// ── Layer slot ────────────────────────────────────────────────────────────────
+//
+// A slot is one stratum in the depth field: a subset of artifacts at a specific
+// depth plane.  This replaces year-based grouping from the temporal version —
+// `artifactIds` here plays the same role that `depositYear === year` filtering
+// played before.  The slot key is stable across depth rotation so React reuses
+// the DOM node as the slot moves from depth 4 → 3 → 2 → 1 → 0 → exit.
+
+interface LayerSlot {
+  key:         number
+  artifactIds: string[]   // the subset of artifacts that belong to this stratum
+  positions:   Record<string, { x: number; y: number }>
+}
+
+// Round-robin assignment is deterministic (safe for hydration).
+// Slot 0 gets artifact 0, 5, 10, …  Slot 1 gets artifact 1, 6, 11, … etc.
+function buildInitialSlots(artifacts: Artifact[]): LayerSlot[] {
+  const groups = Array.from({ length: NUM_LAYERS }, (_, i) =>
+    artifacts.filter((_, j) => j % NUM_LAYERS === i).map(a => a.id),
+  )
+  return groups.map((ids, seed) => ({
+    key:         seed,
+    artifactIds: ids,
+    positions:   buildSlotPositions(ids, seed),
+  }))
+}
+
+// Randomly assigns ~1/NUM_LAYERS of the artifact pool to a new slot.
+function generateNewSlot(artifacts: Artifact[], key: number): LayerSlot {
+  const shuffled = [...artifacts].sort(() => Math.random() - 0.5)
+  const size     = Math.max(1, Math.round(shuffled.length / NUM_LAYERS))
+  const ids      = shuffled.slice(0, size).map(a => a.id)
+  return { key, artifactIds: ids, positions: generateLayerPositions(ids) }
+}
+
+// ── Chaos state persistence ───────────────────────────────────────────────────
+//
+// Saves layer assignments + positions after every full shuffle so the field
+// survives a page refresh.  Layer assignments are the only meaningful data —
+// Supabase artifact records are never mutated.
+
+const CHAOS_STATE_KEY = "rsv-chaos-state"
+
+interface ChaosLocalState {
+  layerMap:  Record<string, number>
+  positions: Record<string, { x: number; y: number }>
+}
+
+function saveChaosLocalState(slots: LayerSlot[]): void {
+  try {
+    const layerMap:  Record<string, number>                    = {}
+    const positions: Record<string, { x: number; y: number }> = {}
+    slots.forEach((slot, i) => {
+      slot.artifactIds.forEach(id => {
+        layerMap[id] = i
+        if (slot.positions[id]) positions[id] = slot.positions[id]
+      })
+    })
+    localStorage.setItem(CHAOS_STATE_KEY, JSON.stringify({ layerMap, positions }))
+  } catch {}
+}
+
+function loadChaosLocalState(): ChaosLocalState | null {
+  try {
+    const raw = localStorage.getItem(CHAOS_STATE_KEY)
+    return raw ? JSON.parse(raw) : null
+  } catch { return null }
+}
+
+// Reconstruct slots from a saved state, round-robin-placing any new artifacts
+// that weren't present when the state was saved.
+function buildSlotsFromLocalState(
+  artifacts: Artifact[],
+  state: ChaosLocalState,
+): LayerSlot[] {
+  const groups: string[][] = Array.from({ length: NUM_LAYERS }, () => [])
+  artifacts.forEach((a, i) => {
+    const layer = state.layerMap[a.id] !== undefined
+      ? clamp(state.layerMap[a.id], 0, NUM_LAYERS - 1)
+      : i % NUM_LAYERS
+    groups[layer].push(a.id)
+  })
+  return groups.map((ids, seed) => ({
+    key:         seed,
+    artifactIds: ids,
+    positions:   Object.fromEntries(
+      ids.map(id => [id, state.positions[id] ?? fallbackPosition(`${id}:${seed}`)]),
+    ),
+  }))
 }
 
 // ── Animation constants ───────────────────────────────────────────────────────
@@ -90,7 +236,6 @@ const DELETE_TRANSITION = {
   filter:  { duration: 0.75, times: [0, 0.12, 0.42, 0.72, 1], ease: "easeIn" as const },
 }
 
-// Very slow ease-in-out — starts almost flat, accelerates through middle, settles gently
 const DRIFT_EASE = [0.76, 0, 0.24, 1] as const
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -110,13 +255,14 @@ function loadDisplayOrder(): string[] {
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export function FragmentField({ serverArtifacts }: FragmentFieldProps) {
-  const router  = useRouter()
+  const router   = useRouter()
   const { user } = useAuth()
-  const isAdmin = !!user
+  const isAdmin  = !!user
   const { viewMode, shuffleSignal, mediaFilter } = useViewContext()
   const effectiveView = mediaFilter !== "all" ? "grid" : viewMode
   const { allArtifacts } = useArtifacts(serverArtifacts)
 
+  const scrollTrackRef      = useRef<HTMLDivElement>(null)
   const containerRef        = useRef<HTMLDivElement>(null)
   const dragStateRef        = useRef<DragState | null>(null)
   const didDragRef          = useRef(false)
@@ -126,8 +272,11 @@ export function FragmentField({ serverArtifacts }: FragmentFieldProps) {
   const inactivityTimerRef  = useRef<ReturnType<typeof setTimeout> | null>(null)
   const visibleArtifactsRef = useRef<Artifact[]>([])
   const hasStartedDriftRef  = useRef(false)
+  const consumedCountRef    = useRef(0)
+  const slotKeyCounterRef   = useRef(NUM_LAYERS)
+  const slotsRef            = useRef<LayerSlot[]>([])
 
-  const [positions,    setPositions]    = useState(() => buildInitialPositions(allArtifacts))
+  const [slots,        setSlots]        = useState<LayerSlot[]>(() => buildInitialSlots(serverArtifacts))
   const [draggedId,    setDraggedId]    = useState<string | null>(null)
   const [hoveredId,    setHoveredId]    = useState<string | null>(null)
   const [expandedId,   setExpandedId]   = useState<string | null>(null)
@@ -139,11 +288,16 @@ export function FragmentField({ serverArtifacts }: FragmentFieldProps) {
   const [driftActive,  setDriftActive]  = useState(true)
   const [scrollY,      setScrollY]      = useState(0)
 
-  // Temporal depth camera — scrollY mapped to year layers
-  const depthCamera     = scrollY / STRATUM_HEIGHT
-  const currentDepthYear = clamp(Math.round(NEWEST_YEAR - depthCamera), OLDEST_YEAR, NEWEST_YEAR)
+  // scrollProgress drives all layer transforms, same as the temporal version.
+  // rawFrac is the linear 0→1 position within the current layer's scroll budget.
+  // mappedFrac applies the hold-phase curve so the active layer stays stable
+  // for the first 65% of its budget before beginning the depth transition.
+  const scrollProgress = scrollY / SCROLL_PER_LAYER
+  const rawFrac        = scrollProgress - Math.floor(scrollProgress)
+  const mappedFrac     = applyHoldPhase(rawFrac)
 
   useEffect(() => { driftStateRef.current = driftState }, [driftState])
+  useEffect(() => { slotsRef.current = slots }, [slots])
 
   const orderedArtifacts = useMemo(() => {
     const existingIds = new Set(allArtifacts.map(a => a.id))
@@ -163,21 +317,84 @@ export function FragmentField({ serverArtifacts }: FragmentFieldProps) {
 
   useEffect(() => { visibleArtifactsRef.current = visibleArtifacts }, [visibleArtifacts])
 
-  useEffect(() => {
-    setDisplayOrder(loadDisplayOrder())
-  }, [])
+  useEffect(() => { setDisplayOrder(loadDisplayOrder()) }, [])
 
   useEffect(() => {
     if (isFirstRender.current) { isFirstRender.current = false; return }
     try { localStorage.setItem(DISPLAY_ORDER_KEY, JSON.stringify(displayOrder)) } catch {}
   }, [displayOrder])
 
-  // Scroll tracking — reads scrollTop of the <main> ancestor
+  // Distribute newly deposited artifacts into slots (round-robin by slot index).
+  useEffect(() => {
+    setSlots(prev => {
+      const known    = new Set(prev.flatMap(s => s.artifactIds))
+      const incoming = allArtifacts.filter(a => !known.has(a.id))
+      if (incoming.length === 0) return prev
+      const next = prev.map(s => ({
+        ...s,
+        artifactIds: [...s.artifactIds],
+        positions:   { ...s.positions },
+      }))
+      incoming.forEach((a, i) => {
+        const target = i % NUM_LAYERS
+        next[target].artifactIds.push(a.id)
+        next[target].positions[a.id] = fallbackPosition(a.id)
+      })
+      return next
+    })
+  }, [allArtifacts])
+
+  // Reset chaos field whenever the view is entered.
+  // Restores a previously shuffled state from localStorage if available;
+  // otherwise falls back to the deterministic initial layout.
   useEffect(() => {
     if (effectiveView !== "chaos") return
-    const el = containerRef.current?.parentElement
+    if (scrollTrackRef.current?.parentElement) {
+      scrollTrackRef.current.parentElement.scrollTop = 0
+    }
+    setScrollY(0)
+    consumedCountRef.current   = 0
+    slotKeyCounterRef.current  = NUM_LAYERS
+    hasStartedDriftRef.current = false
+    setSlots(() => {
+      const arts  = visibleArtifactsRef.current
+      const all   = arts.length > 0 ? arts : serverArtifacts
+      const saved = loadChaosLocalState()
+      if (saved) return buildSlotsFromLocalState(all, saved)
+      return buildInitialSlots(all)
+    })
+  }, [effectiveView]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Scroll listener + slot rotation — mirrors the temporal scroll listener but
+  // also rotates the slot stack when a layer has been fully scrolled past.
+  useEffect(() => {
+    if (effectiveView !== "chaos") return
+    const el = scrollTrackRef.current?.parentElement
     if (!el) return
-    const onScroll = () => setScrollY(el.scrollTop)
+    const onScroll = () => {
+      const newScrollY  = el.scrollTop
+      setScrollY(newScrollY)
+      setHoveredId(null)
+
+      const newConsumed = Math.floor(newScrollY / SCROLL_PER_LAYER)
+      if (newConsumed > consumedCountRef.current) {
+        const advances    = newConsumed - consumedCountRef.current
+        consumedCountRef.current = newConsumed
+        // Capture keys/positions outside the updater to avoid StrictMode double-calls
+        const newKeys     = Array.from({ length: advances }, () => slotKeyCounterRef.current++)
+        const newSlots    = newKeys.map(key =>
+          generateNewSlot(visibleArtifactsRef.current, key),
+        )
+        setSlots(prev => {
+          let next = [...prev]
+          for (let i = 0; i < advances; i++) {
+            const [, ...rest] = next
+            next = [...rest, newSlots[i]]
+          }
+          return next
+        })
+      }
+    }
     el.addEventListener("scroll", onScroll, { passive: true })
     return () => el.removeEventListener("scroll", onScroll)
   }, [effectiveView])
@@ -189,18 +406,34 @@ export function FragmentField({ serverArtifacts }: FragmentFieldProps) {
     } else if (viewMode === "grid") {
       setDisplayOrder([...orderedArtifacts].sort(() => Math.random() - 0.5).map(a => a.id))
     } else {
-      setDisplayOrder([...orderedArtifacts].sort(() => Math.random() - 0.5).map(a => a.id))
-      setPositions(prev => {
-        const next = { ...prev }
-        orderedArtifacts.forEach(a => {
-          next[a.id] = { x: 2 + Math.random() * 83, y: 2 + Math.random() * 88 }
-        })
-        return next
-      })
-      // Dramatic drift burst on shuffle
+      // Chaos: fully recompose the field — redistribute artifacts across all
+      // five layers, generate new positions, randomize drift for every artifact.
+      // Round-robin after shuffle guarantees each layer receives ~N/5 artifacts
+      // rather than risking accidental clustering from pure random assignment.
+      const arts = visibleArtifactsRef.current
+      if (arts.length === 0) return
+
+      const shuffled  = [...arts].sort(() => Math.random() - 0.5)
+      const groups: string[][] = Array.from({ length: NUM_LAYERS }, () => [])
+      shuffled.forEach((a, i) => { groups[i % NUM_LAYERS].push(a.id) })
+
+      const newSlots: LayerSlot[] = groups.map(ids => ({
+        key:         slotKeyCounterRef.current++,
+        artifactIds: ids,
+        positions:   generateLayerPositions(ids),
+      }))
+
+      // Scroll back to the surface so the newly composed layer 0 is active
+      const el = scrollTrackRef.current?.parentElement
+      if (el) el.scrollTop = 0
+      setScrollY(0)
+      consumedCountRef.current = 0
+
+      setSlots(newSlots)
+
       setDriftState(() => {
         const next: Record<string, DriftOffset> = {}
-        orderedArtifacts.forEach(a => {
+        arts.forEach(a => {
           next[a.id] = {
             x:       randRange(-120, 120),
             y:       randRange(-120, 120),
@@ -211,6 +444,8 @@ export function FragmentField({ serverArtifacts }: FragmentFieldProps) {
         })
         return next
       })
+
+      saveChaosLocalState(newSlots)
     }
   }
 
@@ -237,7 +472,6 @@ export function FragmentField({ serverArtifacts }: FragmentFieldProps) {
     return () => window.removeEventListener("deposit:open", handler)
   }, [])
 
-  // Seed initial drift offsets when entering chaos view
   useEffect(() => {
     if (effectiveView !== "chaos") return
     setDriftState(prev => {
@@ -257,7 +491,6 @@ export function FragmentField({ serverArtifacts }: FragmentFieldProps) {
     })
   }, [effectiveView])
 
-  // Pause on hover / expand / drag; resume 3 s after last interaction
   useEffect(() => {
     if (inactivityTimerRef.current) { clearTimeout(inactivityTimerRef.current); inactivityTimerRef.current = null }
     if (effectiveView !== "chaos") return
@@ -270,7 +503,6 @@ export function FragmentField({ serverArtifacts }: FragmentFieldProps) {
     return () => { if (inactivityTimerRef.current) { clearTimeout(inactivityTimerRef.current); inactivityTimerRef.current = null } }
   }, [hoveredId, expandedId, draggedId, effectiveView])
 
-  // Drift interval — 7 s initial delay on page load, then every 3 s
   useEffect(() => {
     if (!driftActive || effectiveView !== "chaos") return
 
@@ -309,15 +541,19 @@ export function FragmentField({ serverArtifacts }: FragmentFieldProps) {
     e.preventDefault()
     containerRef.current?.setPointerCapture(e.pointerId)
 
-    let currentPos = positions[id] ?? fallbackPosition(id)
+    let currentPos = slotsRef.current[0]?.positions[id] ?? fallbackPosition(id)
     const drift = driftStateRef.current[id]
     if (drift && containerRef.current) {
       const rect = containerRef.current.getBoundingClientRect()
       const absorbed = {
-        x: clamp(currentPos.x + (drift.x / rect.width  * 100), 0, 85),
-        y: clamp(currentPos.y + (drift.y / rect.height * 100), 0, 95),
+        x: clamp(currentPos.x + (drift.x / rect.width  * 100), 0, 82),
+        y: clamp(currentPos.y + (drift.y / rect.height * 100), 0, 50),
       }
-      setPositions(prev => ({ ...prev, [id]: absorbed }))
+      setSlots(prev => {
+        const next = [...prev]
+        next[0] = { ...next[0], positions: { ...next[0].positions, [id]: absorbed } }
+        return next
+      })
       setDriftState(prev => ({ ...prev, [id]: { x: 0, y: 0, rotate: 0, scale: 1, zOffset: 0 } }))
       currentPos = absorbed
     }
@@ -334,9 +570,13 @@ export function FragmentField({ serverArtifacts }: FragmentFieldProps) {
     const dx = e.clientX - drag.startX
     const dy = e.clientY - drag.startY
     if (Math.abs(dx) > 4 || Math.abs(dy) > 4) didDragRef.current = true
-    const newX = Math.max(0, Math.min(85, drag.initialPos.x + (dx / rect.width)  * 100))
-    const newY = Math.max(0, Math.min(95, drag.initialPos.y + (dy / rect.height) * 100))
-    setPositions(prev => ({ ...prev, [drag.id]: { x: newX, y: newY } }))
+    const newX = Math.max(0, Math.min(82, drag.initialPos.x + (dx / rect.width)  * 100))
+    const newY = Math.max(0, Math.min(50, drag.initialPos.y + (dy / rect.height) * 100))
+    setSlots(prev => {
+      const next = [...prev]
+      next[0] = { ...next[0], positions: { ...next[0].positions, [drag.id]: { x: newX, y: newY } } }
+      return next
+    })
   }
 
   function handlePointerUp() {
@@ -355,7 +595,10 @@ export function FragmentField({ serverArtifacts }: FragmentFieldProps) {
     await fetch(`/api/artifacts/${id}`, { method: "DELETE" })
     setDeletingId(null)
     setDisplayOrder(prev => prev.filter(oid => oid !== id))
-    setPositions(prev => { const { [id]: _, ...rest } = prev; return rest })
+    setSlots(prev => prev.map(slot => {
+      const { [id]: _, ...rest } = slot.positions
+      return { ...slot, artifactIds: slot.artifactIds.filter(aid => aid !== id), positions: rest }
+    }))
     router.refresh()
   }
 
@@ -410,101 +653,113 @@ export function FragmentField({ serverArtifacts }: FragmentFieldProps) {
     <>
       {/* ── CHAOS ─────────────────────────────────────────────── */}
       {effectiveView === "chaos" && (
+        // Scroll track — large enough to be effectively infinite
         <div
-          ref={containerRef}
-          className="relative w-full min-h-[4200px]"
-          onPointerMove={handlePointerMove}
-          onPointerUp={handlePointerUp}
-          onPointerCancel={handlePointerUp}
-          onPointerLeave={handlePointerUp}
+          ref={scrollTrackRef}
+          style={{ height: `calc(${MAX_SCROLL_LAYERS * SCROLL_PER_LAYER}px + 100vh)` }}
+          className="relative"
         >
-          {/* Sticky temporal depth indicator */}
-          <div className="sticky top-0 h-0 w-full z-[45] pointer-events-none overflow-visible">
-            <AnimatePresence mode="wait">
-              <motion.div
-                key={currentDepthYear}
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.6 }}
-                className="absolute top-5 left-5 space-y-1.5"
-              >
-                <div className="text-[9px] text-muted-foreground/30 tracking-[0.3em] uppercase tabular-nums">
-                  {currentDepthYear}
+          {/* Sticky 100vh viewport — stays pinned while scroll track passes beneath */}
+          <div
+            ref={containerRef}
+            className="sticky top-0 h-screen overflow-hidden"
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerUp}
+            onPointerCancel={handlePointerUp}
+            onPointerLeave={handlePointerUp}
+          >
+
+            {/*
+              Depth strata — the direct structural equivalent of the temporal
+              STRATA_YEARS.map loop.
+
+              Temporal version:   STRATA_YEARS.map((year, layerIndex) => {
+                                    relPos = layerIndex - scrollProgress
+                                    layerArtifacts = filter(a => a.depositYear === year)
+                                  })
+
+              Chaos version:      slots.map((slot, depth) => {
+                                    relPos = depth - frac
+                                    layerArtifacts = filter(a => slot.artifactIds has a.id)
+                                  })
+
+              `slot.key` is stable as the slot moves through depths, so React
+              reuses the DOM node (avoiding flash) as each slot rises from
+              depth 4 → 3 → 2 → 1 → 0 → exit.
+            */}
+            {slots.map((slot, depth) => {
+              const relPos = depth - mappedFrac
+              const { scale, opacity, blur, contrast, saturate, pointerEvents } = getLayerTransform(relPos)
+              const driftDuration = 9 + depth * 1.5
+              const idSet         = new Set(slot.artifactIds)
+              const layerArtifacts = visibleArtifacts.filter(a => idSet.has(a.id))
+
+              return (
+                <div
+                  key={slot.key}
+                  className="absolute inset-0"
+                  style={{
+                    transform:     `scale(${scale.toFixed(4)})`,
+                    opacity,
+                    filter:        `blur(${blur.toFixed(2)}px) contrast(${contrast.toFixed(2)}) saturate(${saturate.toFixed(2)})`,
+                    zIndex:        NUM_LAYERS - depth,
+                    pointerEvents,
+                    transition:    "transform 0.08s ease-out, opacity 0.08s ease-out, filter 0.12s ease-out",
+                    willChange:    "transform, opacity, filter",
+                  }}
+                >
+                  {layerArtifacts.map(artifact => {
+                    const pos        = slot.positions[artifact.id] ?? fallbackPosition(artifact.id)
+                    const isDeleting = deletingId === artifact.id
+                    const isDragging = draggedId === artifact.id
+                    const isHovered  = hoveredId === artifact.id
+                    const drift      = driftState[artifact.id] ?? { x: 0, y: 0, rotate: 0, scale: 1, zOffset: 0 }
+
+                    return (
+                      <motion.div
+                        key={artifact.id}
+                        className={isDragging ? "absolute cursor-grabbing" : "absolute cursor-grab"}
+                        style={{
+                          top:           `${pos.y}%`,
+                          left:          `${pos.x}%`,
+                          zIndex:        isDragging ? 100 : isHovered ? 50 : 10 + (drift.zOffset ?? 0),
+                          pointerEvents: isDeleting ? "none" : undefined,
+                        }}
+                        animate={{
+                          x:       isDragging ? 0 : drift.x,
+                          y:       isDragging ? 0 : drift.y,
+                          rotate:  isDragging ? 0 : drift.rotate,
+                          scale:   isDragging ? 1.03 : isHovered ? 1.02 : (drift.scale ?? 1),
+                          opacity: isDragging ? 0.95 : 1,
+                        }}
+                        transition={isDragging ? {
+                          x: { duration: 0 }, y: { duration: 0 }, rotate: { duration: 0 },
+                          scale:   { duration: 0.15, ease: "easeOut" },
+                          opacity: { duration: 0.1 },
+                        } : {
+                          x:       { duration: driftDuration,       ease: DRIFT_EASE },
+                          y:       { duration: driftDuration + 0.5, ease: DRIFT_EASE },
+                          rotate:  { duration: driftDuration + 1,   ease: DRIFT_EASE },
+                          scale:   { duration: 8,                   ease: DRIFT_EASE },
+                          opacity: { duration: 0.4 },
+                        }}
+                        onPointerDown={e => !isDeleting && handlePointerDown(e, artifact.id)}
+                        onMouseEnter={() => !dragStateRef.current && !isDeleting && setHoveredId(artifact.id)}
+                        onMouseLeave={() => setHoveredId(null)}
+                      >
+                        {card(artifact)}
+                      </motion.div>
+                    )
+                  })}
                 </div>
-                <div className="w-4 h-px bg-muted-foreground/15" />
-              </motion.div>
-            </AnimatePresence>
-          </div>
+              )
+            })}
 
-          {/* Year strata dividers */}
-          {STRATA_YEARS.map((year, i) => (
-            <div
-              key={year}
-              className="absolute left-0 right-0 pointer-events-none select-none"
-              style={{ top: i * STRATUM_HEIGHT + 48 }}
-            >
-              <div className="flex items-center gap-4 px-5">
-                <span className="text-[9px] tracking-[0.28em] text-muted-foreground/15 uppercase tabular-nums shrink-0">
-                  {year}
-                </span>
-                <div className="flex-1 border-t border-muted-foreground/[0.05]" />
-              </div>
+            {/* Fragment count */}
+            <div className="absolute bottom-4 right-4 z-[45] text-[10px] text-muted-foreground/30 pointer-events-none select-none">
+              {visibleArtifacts.length} fragments
             </div>
-          ))}
 
-          {/* Artifacts */}
-          {visibleArtifacts.map((artifact, index) => {
-            const pos        = positions[artifact.id] ?? fallbackPosition(artifact.id)
-            const isDeleting = deletingId === artifact.id
-            const isDragging = draggedId === artifact.id
-            const isHovered  = hoveredId === artifact.id
-            const drift      = driftState[artifact.id] ?? { x: 0, y: 0, rotate: 0, scale: 1, zOffset: 0 }
-            const artDepth   = getArtifactDepth(artifact)
-            const { scale: dScale, opacity: dOpacity, blur: dBlur, driftDuration } = getDepthProps(artDepth, depthCamera)
-
-            return (
-              <motion.div
-                key={artifact.id}
-                className={isDragging ? "absolute cursor-grabbing" : "absolute cursor-grab"}
-                style={{
-                  top:           `${pos.y}%`,
-                  left:          `${pos.x}%`,
-                  // Newer artifacts sit on top; drift adds z-variation within each layer
-                  zIndex:        isDragging ? 100 : isHovered ? 50 : (10 - artDepth * 2) + (drift.zOffset ?? 0),
-                  pointerEvents: isDeleting ? "none" : undefined,
-                  // Blur in style (not animate) so it tracks scroll immediately
-                  filter:        isDragging || isHovered ? undefined : dBlur > 0.05 ? `blur(${dBlur.toFixed(2)}px)` : undefined,
-                }}
-                animate={{
-                  x:       isDragging ? 0 : drift.x,
-                  y:       isDragging ? 0 : drift.y,
-                  rotate:  isDragging ? 0 : drift.rotate,
-                  scale:   isDragging ? 1.03 * dScale : isHovered ? 1.02 * dScale : (drift.scale ?? 1) * dScale,
-                  opacity: isDragging ? 0.95 : dOpacity,
-                }}
-                transition={isDragging ? {
-                  x: { duration: 0 }, y: { duration: 0 }, rotate: { duration: 0 },
-                  scale:   { duration: 0.15, ease: "easeOut" },
-                  opacity: { duration: 0.1 },
-                } : {
-                  x:       { duration: driftDuration,       ease: DRIFT_EASE },
-                  y:       { duration: driftDuration + 0.5, ease: DRIFT_EASE },
-                  rotate:  { duration: driftDuration + 1,   ease: DRIFT_EASE },
-                  scale:   { duration: 8,                   ease: DRIFT_EASE },
-                  opacity: { duration: 0.4 },
-                }}
-                onPointerDown={e => !isDeleting && handlePointerDown(e, artifact.id)}
-                onMouseEnter={() => !dragStateRef.current && !isDeleting && setHoveredId(artifact.id)}
-                onMouseLeave={() => setHoveredId(null)}
-              >
-                {card(artifact)}
-              </motion.div>
-            )
-          })}
-
-          <div className="absolute bottom-4 right-4 text-[10px] text-muted-foreground/30 pointer-events-none select-none">
-            {visibleArtifacts.length} fragments
           </div>
         </div>
       )}

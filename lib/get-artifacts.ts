@@ -16,6 +16,7 @@ type ArtifactRow = {
   status: string
   technical: { dimensions?: string; duration?: string; format?: string } | null
   tags: string[] | null
+  deposit_year: number | null
 }
 
 function rowToArtifact(row: ArtifactRow): Artifact {
@@ -30,6 +31,7 @@ function rowToArtifact(row: ArtifactRow): Artifact {
     description: row.description,
     technical: row.technical ?? undefined,
     tags: row.tags ?? undefined,
+    depositYear: row.deposit_year ?? undefined,
     media: {
       type: row.media_type as Artifact["media"]["type"],
       url: row.media_url ?? undefined,
