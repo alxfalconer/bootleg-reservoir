@@ -55,7 +55,7 @@ export function ArtifactCard({ artifact, isExpanded, isDeleting, onDelete, varia
               onClick={(e) => { e.stopPropagation(); onDelete() }}
               onPointerDown={(e) => e.stopPropagation()}
             >
-              withdraw
+              delete
             </button>
           )}
         </motion.div>
