@@ -295,11 +295,14 @@ export function FragmentField({ serverArtifacts }: FragmentFieldProps) {
 
   // scrollProgress drives all layer transforms, same as the temporal version.
   // rawFrac is the linear 0→1 position within the current layer's scroll budget.
-  // mappedFrac applies the hold-phase curve so the active layer stays stable
-  // for the first 65% of its budget before beginning the depth transition.
-  const scrollProgress = scrollY / SCROLL_PER_LAYER
-  const rawFrac        = scrollProgress - Math.floor(scrollProgress)
-  const mappedFrac     = applyHoldPhase(rawFrac)
+  // During manual scrolling, mappedFrac applies a hold-phase curve (layers pause
+  // for the first 65% of the budget).  During autoplay the hold phase is skipped
+  // so depth progresses continuously — otherwise the 7-second frozen periods make
+  // autoplay look broken even though scrollTop IS advancing.
+  const isAutoplayRunning = autoplay && !hoveredId && !expandedId && !draggedId
+  const scrollProgress    = scrollY / SCROLL_PER_LAYER
+  const rawFrac           = scrollProgress - Math.floor(scrollProgress)
+  const mappedFrac        = isAutoplayRunning ? rawFrac : applyHoldPhase(rawFrac)
 
   useEffect(() => { driftStateRef.current = driftState }, [driftState])
   useEffect(() => { slotsRef.current = slots }, [slots])
@@ -432,7 +435,7 @@ export function FragmentField({ serverArtifacts }: FragmentFieldProps) {
   useEffect(() => {
     if (effectiveView !== "chaos") return
 
-    const SPEED_PX_PER_S  = 100  // DEBUG: fast for visibility testing
+    const SPEED_PX_PER_S  = 60   // DEBUG: still obvious but less frantic than 100
     const RESUME_AFTER_MS = 3000
 
     let lastTime: number | null = null
