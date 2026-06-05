@@ -45,7 +45,7 @@ export function ArtifactCard({ artifact, isExpanded, isDeleting, onDelete, onPub
 
         {/* Metadata */}
         <motion.div
-          className="mt-2 px-2 py-1 w-full overflow-hidden space-y-0.5 transition-colors duration-200 group-hover:bg-white"
+          className="mt-2 px-2 py-1 w-full overflow-hidden space-y-0.5 transition-colors duration-200 group-hover:bg-background"
           animate={{ opacity: isDeleting ? 0 : 1 }}
           transition={{ duration: isDeleting ? 0.35 : 0.1, delay: isDeleting ? 0.2 : 0 }}
         >

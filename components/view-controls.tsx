@@ -1,6 +1,7 @@
 "use client"
 
 import { useViewContext, type ViewMode, type MediaFilter } from "@/lib/view-context"
+import { useTheme } from "@/lib/theme"
 
 const MODES: { value: ViewMode; label: string }[] = [
   { value: "chaos", label: "chaos" },
@@ -17,9 +18,10 @@ const FILTERS: { value: MediaFilter; label: string }[] = [
 
 export function ViewControls() {
   const { viewMode, setViewMode, triggerShuffle, mediaFilter, setMediaFilter } = useViewContext()
+  const { dark, toggle: toggleTheme } = useTheme()
 
   return (
-    <div className="fixed bottom-5 right-5 md:bottom-7 md:right-7 z-[55] border border-foreground/[0.08] bg-white shadow-md rounded-[5px] overflow-hidden">
+    <div className="fixed bottom-5 right-5 md:bottom-7 md:right-7 z-[55] border border-foreground/[0.08] bg-background shadow-md dark:shadow-none rounded-[5px] overflow-hidden">
 
       {/* View mode */}
       <div className="flex items-center gap-6 px-6 py-2">
@@ -39,7 +41,15 @@ export function ViewControls() {
           onClick={triggerShuffle}
           className="group/shuffle transition-colors duration-150"
         >
-          <img src="/shuffle.svg" alt="shuffle" className="w-4 h-4 opacity-40 group-hover/shuffle:opacity-60" />
+          <img src="/shuffle.svg" alt="shuffle" className="w-4 h-4 opacity-40 group-hover/shuffle:opacity-60 dark:invert" />
+        </button>
+
+        <button
+          onClick={toggleTheme}
+          className="text-[10px] text-foreground/40 hover:text-foreground/70 transition-colors duration-150 leading-none"
+          title={dark ? "Switch to light mode" : "Switch to dark mode"}
+        >
+          {dark ? "○" : "●"}
         </button>
       </div>
 
