@@ -27,7 +27,11 @@ export function ViewProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     try {
       const stored = localStorage.getItem("rsv-view-mode") as ViewMode | null
-      if (stored && ["chaos", "grid", "single"].includes(stored)) setViewModeState(stored)
+      if (stored && ["chaos", "grid", "single"].includes(stored)) {
+        setViewModeState(stored)
+      } else if (window.innerWidth < 768) {
+        setViewModeState("grid")
+      }
     } catch {}
   }, [])
 
