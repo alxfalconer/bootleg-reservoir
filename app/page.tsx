@@ -1,6 +1,7 @@
 import { FragmentField } from "@/components/fragment-field"
 import { DepositTrigger } from "@/components/deposit-trigger"
 import { ViewControls } from "@/components/view-controls"
+import { MobileNav } from "@/components/mobile-nav"
 import { ClientProviders } from "@/components/client-providers"
 import { ReservoirSidebar } from "@/components/reservoir-sidebar"
 import { getPublishedArtifacts } from "@/lib/get-artifacts"
@@ -34,11 +35,14 @@ export default async function ReservoirPage() {
           {/* Spacer for mobile header */}
           <div className="md:hidden h-14" />
           <FragmentField serverArtifacts={serverArtifacts} />
+          {/* Spacer for mobile bottom nav */}
+          <div className="md:hidden h-14" style={{ paddingBottom: "env(safe-area-inset-bottom)" }} />
         </main>
 
       </div>
 
       <ViewControls />
+      <MobileNav />
     </ClientProviders>
   )
 }

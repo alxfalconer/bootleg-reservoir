@@ -54,7 +54,7 @@ export function ViewControls() {
   ]
 
   return (
-    <div ref={constraintsRef} className="fixed inset-0 pointer-events-none z-[55]">
+    <div ref={constraintsRef} className="hidden md:block fixed inset-0 pointer-events-none z-[55]">
       <motion.div
         drag
         dragConstraints={constraintsRef}
