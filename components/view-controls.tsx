@@ -66,8 +66,8 @@ export function ViewControls() {
         className={`absolute pointer-events-auto border ${BORDER} bg-background/[0.97] backdrop-blur-md overflow-hidden select-none shadow-[0_2px_12px_rgba(0,0,0,0.08)] dark:shadow-[0_2px_12px_rgba(0,0,0,0.3)] rounded-[5px] cursor-grab active:cursor-grabbing`}
       >
 
-        {/* View mode: Field / Index */}
-        <div className={`flex items-stretch border-b ${BORDER}`}>
+        {/* View mode: Field / Index — desktop only */}
+        <div className={`hidden md:flex items-stretch border-b ${BORDER}`}>
           {VIEW_MODES.map(({ value, label }, i) => (
             <button
               key={value}
@@ -85,8 +85,8 @@ export function ViewControls() {
           ))}
         </div>
 
-        {/* Play/Pause + Shuffle — shared row */}
-        <div className={`flex items-stretch border-b ${BORDER}`}>
+        {/* Play/Pause + Shuffle — desktop only */}
+        <div className={`hidden md:flex items-stretch border-b ${BORDER}`}>
           {viewMode === "chaos" && (
             <button
               onPointerDown={e => e.stopPropagation()}
@@ -114,8 +114,8 @@ export function ViewControls() {
           </button>
         </div>
 
-        {/* Filter grid: 2 × 3, icon only */}
-        <div className="grid grid-cols-2">
+        {/* Filter grid: 2 × 3, icon only — desktop only */}
+        <div className="hidden md:grid grid-cols-2">
           {filters.map(({ value, icon, title }, i) => {
             const active   = mediaFilter === value
             const rightCol = i % 2 !== 0
@@ -138,6 +138,18 @@ export function ViewControls() {
               </button>
             )
           })}
+        </div>
+
+        {/* Shuffle — mobile only */}
+        <div className={`flex md:hidden items-stretch border-b ${BORDER}`}>
+          <button
+            onPointerDown={e => e.stopPropagation()}
+            onClick={guard(triggerShuffle)}
+            title="Shuffle"
+            className={`flex-1 flex items-center justify-center py-2.5 text-foreground/35 hover:text-foreground/70 hover:bg-foreground/[0.03] transition-colors duration-100 cursor-pointer`}
+          >
+            <ShuffleIcon size={20} strokeWidth={1.4} />
+          </button>
         </div>
 
         {/* Theme toggle */}
