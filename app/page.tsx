@@ -23,7 +23,7 @@ export default async function ReservoirPage() {
           <div className="flex justify-between items-center px-6 py-3">
             <div className="space-y-0.5">
               <h1 className="text-sm font-bold tracking-tight">Reservoir</h1>
-              <p className="text-[10px] text-muted-foreground italic">Cut into the future</p>
+              <p className="text-[10px] text-muted-foreground italic">When you cut into the present<br />the future leaks out.</p>
             </div>
             <DepositTrigger />
           </div>
